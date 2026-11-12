@@ -1,0 +1,21 @@
+modules:
+  jira:issuePanel:
+    - key: precedent-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Precedent
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.tsx
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/3fb3cd0d-3fb4-4fd2-bd56-bbe0cf1beda6

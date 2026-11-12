@@ -1,0 +1,3 @@
+# Teamwork Graph is optional enrichment, never on the critical path
+
+The hackathon theme centres on the Teamwork Graph, so a reader may expect Precedent to be built on it. We deliberately keep it optional: as of Nov 2026 the Forge TWG API is Preview (some docs still say test organisations only), runs `asUser` only, requires an org-admin install, and returns silently empty results when a scope is missing — all unacceptable risks on a judge's freshly installed site. Precedent feature-detects TWG at runtime and uses it only to add people/work connected to a Decision; Conflict detection relies solely on Confluence and Jira APIs. Rovo agents, not TWG, are the primary bonus-prize target.

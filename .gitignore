@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.forge/
+.remember/
+.claude/settings.local.json
+
+# Local editor/agent tooling installed by shell hooks
+.cursor/
