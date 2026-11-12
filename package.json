@@ -5,7 +5,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "deploy": "forge deploy",
-    "lint:manifest": "forge lint"
+    "lint:manifest": "forge lint",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "",
   "license": "MIT",
@@ -17,12 +19,15 @@
   "devDependencies": {
     "@forge/cli": "^15.1.0",
     "@types/react": "^18.3.31",
-    "typescript": "^7.0.2"
+    "@vitest/coverage-v8": "^5.1.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   },
   "allowScripts": {
     "keytar@7.9.0": true
   },
   "dependencies": {
+    "@forge/api": "^8.5.0",
     "@forge/bridge": "^7.3.0-next.12",
     "@forge/react": "^12.5.0-next.2",
     "@forge/resolver": "^2.0.2",

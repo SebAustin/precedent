@@ -7,12 +7,38 @@ modules:
       render: native
       title: Precedent
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  jira:adminPage:
+    - key: precedent-admin
+      resource: admin
+      resolver:
+        function: resolver
+      render: native
+      title: Precedent
   function:
     - key: resolver
       handler: index.handler
 resources:
   - key: main
     path: src/frontend/index.tsx
+  - key: admin
+    path: src/frontend/admin.tsx
+permissions:
+  scopes:
+    # Jira: read/create sample project and issues
+    - read:jira-user
+    - read:jira-work
+    - write:jira-work
+    - manage:jira-project
+    - manage:jira-configuration
+    # Confluence: sample space, Decision pages, labels, marker properties
+    - read:space:confluence
+    - write:space:confluence
+    - read:space.property:confluence
+    - write:space.property:confluence
+    - read:page:confluence
+    - write:page:confluence
+    - write:confluence-content
+    - write:confluence-space
 app:
   runtime:
     name: nodejs24.x

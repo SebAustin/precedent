@@ -16,7 +16,9 @@ Agreed in the grilling session on 2026-11-12. Vocabulary: see [GLOSSARY.md](../G
 - Permissions: only Decision Spaces are read; Precedents the viewer can't read are hidden at render (asUser re-check).
 - Confluence: "Referenced by" byline on Decision pages (after Jira flow works).
 - Rovo agent "Precedent" with actions `findPrecedents`, `checkProposal`, `acknowledgeConflict`, `draftSupersession`; stretch: `rovo:mcp` exposing the two read-only actions.
-- **Sample Workspace** ("Lumen Pay"): 6 Decisions (incl. one Superseded) + 10 issues with known expected Verdicts (3 Conflicts, 4 Related, 3 None); one-click, idempotent, removable.
+- **Sample Workspace** ("Lumen Pay"): 7 Decisions (6 Accepted, 1 Superseded + its replacement) in Confluence space `LUMENPAY`, 10 Proposals in Jira project `LUMENPAY` with known expected Verdicts (3 Conflicts, 5 Related, 2 None; one trap Proposal must not Conflict with the Superseded Decision). Jira admin page → Precedent: one-click, resumable/idempotent, removable (to trash). Never touches a same-key space/project it didn't create (`precedent-sample` marker property).
+  - Judges' first Load shows Forge's "Allow access" consent prompt — mention in testing instructions.
+  - Jira project create/delete run `asApp` (needs `manage:jira-configuration`, unavailable to `asUser`) behind an explicit "caller is Jira admin" check; everything else runs `asUser`.
 
 ## Stack
 - TypeScript, Forge UI Kit (Custom UI only if a screen demands it), runtime `nodejs24.x`, project-local Node 24 (`.nvmrc`) and local `@forge/cli` via `npx forge` (global `forge` is Foundry — don't touch).
