@@ -48,10 +48,11 @@ const RECORD_SCHEMA: ToolSchema = {
   },
 };
 
-function describeDecision(record: DecisionRecord): string {
+/** The id is only for the classifier to reference; humans see titles, never page ids. */
+function describeDecision(record: DecisionRecord, options: { withId: boolean } = { withId: true }): string {
   const d = record.decision;
   return [
-    `<decision id="${record.pageId}">`,
+    options.withId ? `<decision id="${record.pageId}">` : '<decision>',
     `Title: ${d.title}`,
     `Statement: ${d.statement}`,
     `Rationale: ${d.rationale}`,
@@ -69,7 +70,7 @@ export function buildClassifyPrompt(proposal: Proposal, candidates: readonly Dec
       { role: 'system', content: CLASSIFY_SYSTEM },
       {
         role: 'user',
-        content: `<proposal>\n${proposalText(proposal)}\n</proposal>\n\n${candidates.map(describeDecision).join('\n\n')}`,
+        content: `<proposal>\n${proposalText(proposal)}\n</proposal>\n\n${candidates.map((c) => describeDecision(c)).join('\n\n')}`,
       },
     ],
     tools: [RECORD_SCHEMA],
@@ -80,7 +81,7 @@ export function buildClassifyPrompt(proposal: Proposal, candidates: readonly Dec
 const EXPLAIN_SYSTEM = `You help an engineer whose planned work conflicts with a decision their team already made.
 In 2-3 short sentences: say what was decided and why (from the rationale), say concretely how the Proposal collides with it,
 and name the two honest options: change the work to respect the decision, or deliberately propose superseding it.
-Plain text, no headings, no bullet points, no flattery.`;
+Refer to the decision by its title in quotes. Plain text, no headings, no bullet points, no flattery.`;
 
 export function buildExplainPrompt(proposal: Proposal, record: DecisionRecord, verdict: CitedVerdict): Prompt {
   return {
@@ -91,7 +92,7 @@ export function buildExplainPrompt(proposal: Proposal, record: DecisionRecord, v
       { role: 'system', content: EXPLAIN_SYSTEM },
       {
         role: 'user',
-        content: `<proposal>\n${proposalText(proposal)}\n</proposal>\n\n${describeDecision(record)}\nDecided on ${record.decision.decidedOn} by ${record.decision.deciders.join(', ')}.\n\nWhy it conflicts: ${verdict.reason}`,
+        content: `<proposal>\n${proposalText(proposal)}\n</proposal>\n\n${describeDecision(record, { withId: false })}\nDecided on ${record.decision.decidedOn} by ${record.decision.deciders.join(', ')}.\n\nWhy it conflicts: ${verdict.reason}`,
       },
     ],
   };
