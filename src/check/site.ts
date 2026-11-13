@@ -4,15 +4,12 @@
  * show Precedents the viewer can read) is a separate, later concern.
  */
 import api, { route } from '@forge/api';
-import kvs from '@forge/kvs';
 import { DECISION_LABEL } from '../domain/decision';
 import { parseDecisionPage } from '../domain/decisionPage';
-import { SAMPLE_SPACE } from '../sample/lumenPay';
 import { adfToText } from './proposal';
 import type { CheckResult, DecisionRecord, Proposal } from './types';
 
 export const CHECK_PROPERTY = 'precedent-check';
-const DECISION_SPACES_KEY = 'decision-spaces';
 const MAX_DECISIONS = 100;
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' };
 
@@ -20,10 +17,7 @@ async function failIfNotOk(response: { ok: boolean; status: number; text(): Prom
   if (!response.ok) throw new Error(`${what} failed (HTTP ${response.status}): ${(await response.text()).slice(0, 300)}`);
 }
 
-export async function getDecisionSpaces(): Promise<string[]> {
-  const stored = await kvs.get<string[]>(DECISION_SPACES_KEY);
-  return stored && stored.length > 0 ? stored : [SAMPLE_SPACE.key];
-}
+export { getDecisionSpaces } from '../settings/store';
 
 export async function fetchProposal(issueKey: string): Promise<Proposal> {
   const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}?fields=summary,description`);
@@ -73,6 +67,33 @@ export async function writeCheckResult(issueKey: string, result: CheckResult): P
     body: JSON.stringify(result),
   });
   await failIfNotOk(res, `Store check result for ${issueKey}`);
+}
+
+export const ANNOUNCED_PROPERTY = 'precedent-announced';
+
+export async function readAnnounced(issueKey: string): Promise<string[]> {
+  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${ANNOUNCED_PROPERTY}`);
+  if (res.status === 404) return [];
+  await failIfNotOk(res, `Read announced conflicts for ${issueKey}`);
+  const { value } = (await res.json()) as { value: { pageIds?: unknown } };
+  return Array.isArray(value?.pageIds) ? value.pageIds.filter((id): id is string => typeof id === 'string') : [];
+}
+
+/** Posts the (privacy-safe) conflict comment as the app and remembers which Conflicts it covered. */
+export async function announceConflicts(issueKey: string, comment: object, pageIds: readonly string[], previous: readonly string[]) {
+  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/comment`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ body: comment }),
+  });
+  await failIfNotOk(res, `Comment on ${issueKey}`);
+
+  const store = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${ANNOUNCED_PROPERTY}`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ pageIds: [...previous, ...pageIds] }),
+  });
+  await failIfNotOk(store, `Remember announced conflicts for ${issueKey}`);
 }
 
 export async function findIssueKeyBySummary(projectKey: string, summary: string): Promise<string | null> {

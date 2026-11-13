@@ -50,10 +50,21 @@ export interface VerdictView {
   readonly verdicts: readonly AnnotatedVerdict[];
   readonly openConflicts: number;
   readonly dismissedCount: number;
+  /** Precedents hidden because the viewer cannot read their Confluence page. */
+  readonly hiddenCount: number;
 }
 
-/** Joins Verdicts with their Resolutions; dismissed pairs are never shown again. */
-export function annotateVerdicts(verdicts: readonly CitedVerdict[], state: ResolutionState): VerdictView {
+/**
+ * Joins Verdicts with their Resolutions; dismissed pairs are never shown again.
+ * When `readablePageIds` is given, Precedents the viewer cannot read are
+ * removed entirely and only counted — their titles are never revealed.
+ */
+export function annotateVerdicts(
+  allVerdicts: readonly CitedVerdict[],
+  state: ResolutionState,
+  readablePageIds?: ReadonlySet<string>
+): VerdictView {
+  const verdicts = readablePageIds ? allVerdicts.filter((v) => readablePageIds.has(v.pageId)) : allVerdicts;
   const annotated = verdicts.map((v): AnnotatedVerdict => {
     const resolution = state.resolutions[v.pageId];
     return resolution ? { ...v, resolution } : v;
@@ -64,5 +75,6 @@ export function annotateVerdicts(verdicts: readonly CitedVerdict[], state: Resol
     verdicts: visible,
     openConflicts: visible.filter((v) => v.verdict === 'Conflicts' && !v.resolution).length,
     dismissedCount: annotated.length - visible.length,
+    hiddenCount: allVerdicts.length - verdicts.length,
   };
 }

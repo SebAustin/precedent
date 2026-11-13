@@ -82,3 +82,17 @@ describe('annotateVerdicts', () => {
     expect(annotateVerdicts([conflict, related], EMPTY_RESOLUTIONS).openConflicts).toBe(1);
   });
 });
+
+describe('annotateVerdicts with a readability filter', () => {
+  test('hides Precedents the viewer cannot read and counts them without naming them', () => {
+    const view = annotateVerdicts([conflict, related], EMPTY_RESOLUTIONS, new Set(['202']));
+
+    expect(view.verdicts.map((v) => v.pageId)).toEqual(['202']);
+    expect(view.hiddenCount).toBe(1);
+    expect(view.openConflicts).toBe(0);
+  });
+
+  test('shows everything when no filter is given', () => {
+    expect(annotateVerdicts([conflict, related], EMPTY_RESOLUTIONS).hiddenCount).toBe(0);
+  });
+});

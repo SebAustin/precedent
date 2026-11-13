@@ -11,6 +11,7 @@ import ForgeReconciler, {
 } from '@forge/react';
 import type { WorkspaceStatus, WorkspaceSummary } from '../sample/plan';
 import { EvalSection } from './EvalSection';
+import { SettingsSection } from './SettingsSection';
 import { call } from './invokeResult';
 
 type Phase = 'idle' | 'seeding' | 'confirmRemove' | 'removing';
@@ -123,6 +124,8 @@ const App = () => {
           </Button>
         </Inline>
       )}
+
+      <SettingsSection />
 
       <EvalSection isEnabled={summary?.status === 'complete'} />
     </Stack>

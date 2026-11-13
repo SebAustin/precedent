@@ -68,6 +68,11 @@ const App = () => {
           onResolve={handleResolve(v.pageId)}
         />
       ))}
+      {state && state.view.hiddenCount > 0 && (
+        <Text size="small" color="color.text.subtlest">
+          {`${state.view.hiddenCount} related decision${state.view.hiddenCount > 1 ? 's are' : ' is'} in a space you can't access`}
+        </Text>
+      )}
       {state && state.view.dismissedCount > 0 && (
         <Text size="small" color="color.text.subtlest">
           {`${state.view.dismissedCount} dismissed conflict${state.view.dismissedCount > 1 ? 's' : ''} hidden`}

@@ -11,6 +11,8 @@ Agreed in the grilling session on 2026-11-12. Vocabulary: see [GLOSSARY.md](../G
 - Runs automatically on issue create/edit (Forge trigger) plus an on-demand button.
 - Pipeline: CQL candidate search + tag/keyword ranking (top ~5) → Haiku Verdict → Sonnet explanation on Conflicts only; content-hash cache.
 - Jira: issue context panel (status, Citations, Resolution buttons, "Ask Precedent" opening the Rovo agent); one comment per Conflict.
+  - The comment is posted by the app and is **deliberately vague** ("conflicts with an accepted decision — open the Precedent section"): every issue viewer sees comments, but not everyone can read the Decision's space. Titles and Citations live only in the permission-filtered panel. Each Conflict is announced once (`precedent-announced` issue property); resolved Conflicts are never announced.
+  - Admin-page resolvers (seed, remove, evaluation, settings) share a function with the issue panel, so each one requires the admin-page module context **and** a live Jira-admin permission check.
 - Resolutions on Conflicts: **Acknowledge** / **Supersede** / **Dismiss** (stored on the issue with who/when; dismissed pairs never re-raised).
 - Supersession: drafts a Proposed Decision linked to the old one, mentions the old decider(s); old becomes Superseded only when a human Accepts the new one.
 - Permissions: only Decision Spaces are read; Precedents the viewer can't read are hidden at render (asUser re-check).

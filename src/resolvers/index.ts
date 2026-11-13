@@ -2,6 +2,8 @@ import Resolver from '@forge/resolver';
 import { type ProposalEvalResult, SAMPLE_PROPOSAL_KEYS, evaluateSampleProposal } from '../check/sampleEval';
 import { checkProposal } from '../check/service';
 import { type PanelState, type ResolveRequest, getPanelState, resolveConflict } from '../resolve/service';
+import { assertAdminCall } from '../security/admin';
+import { type DecisionSpaceSettings, getDecisionSpaceSettings, saveDecisionSpaces } from '../settings/store';
 import type { WorkspaceSummary } from '../sample/plan';
 import { getSampleWorkspace, removeSampleWorkspace, seedNextItem } from '../sample/service';
 import { type ResolverResult, attempt } from './result';
@@ -9,6 +11,7 @@ import { type ResolverResult, attempt } from './result';
 export type { ResolverResult } from './result';
 
 interface IssueContext {
+  readonly moduleKey?: string;
   readonly accountId?: string;
   readonly extension?: { readonly issue?: { readonly key?: string } };
 }
@@ -32,21 +35,45 @@ function issueKeyFrom(context: IssueContext): string {
 
 const resolver = new Resolver();
 
+/** Runs admin-page work only for Jira admins calling from the admin page. */
+function adminOnly<T>(context: unknown, work: () => Promise<T>): Promise<ResolverResult<T>> {
+  return attempt(async () => {
+    await assertAdminCall(context as IssueContext);
+    return work();
+  });
+}
+
 /* ---------- Sample Workspace (admin page) ---------- */
 
-resolver.define('getSampleWorkspace', (): Promise<ResolverResult<WorkspaceSummary>> => attempt(getSampleWorkspace));
-resolver.define('seedSampleStep', (): Promise<ResolverResult<WorkspaceSummary>> => attempt(seedNextItem));
-resolver.define('removeSampleWorkspace', (): Promise<ResolverResult<WorkspaceSummary>> =>
-  attempt(removeSampleWorkspace)
+resolver.define('getSampleWorkspace', ({ context }): Promise<ResolverResult<WorkspaceSummary>> =>
+  adminOnly(context, getSampleWorkspace)
+);
+resolver.define('seedSampleStep', ({ context }): Promise<ResolverResult<WorkspaceSummary>> =>
+  adminOnly(context, seedNextItem)
+);
+resolver.define('removeSampleWorkspace', ({ context }): Promise<ResolverResult<WorkspaceSummary>> =>
+  adminOnly(context, removeSampleWorkspace)
 );
 
 /* ---------- Verdict eval (admin page) ---------- */
 
-resolver.define('listEvalProposals', (): Promise<ResolverResult<readonly string[]>> =>
-  attempt(async () => SAMPLE_PROPOSAL_KEYS)
+resolver.define('listEvalProposals', ({ context }): Promise<ResolverResult<readonly string[]>> =>
+  adminOnly(context, async () => SAMPLE_PROPOSAL_KEYS)
 );
-resolver.define('evalSampleProposal', ({ payload }): Promise<ResolverResult<ProposalEvalResult>> =>
-  attempt(() => evaluateSampleProposal(String((payload as { proposalKey?: unknown }).proposalKey)))
+resolver.define('evalSampleProposal', ({ context, payload }): Promise<ResolverResult<ProposalEvalResult>> =>
+  adminOnly(context, () => evaluateSampleProposal(String((payload as { proposalKey?: unknown }).proposalKey)))
+);
+
+/* ---------- Decision Spaces settings (admin page) ---------- */
+
+resolver.define('getDecisionSpaceSettings', ({ context }): Promise<ResolverResult<DecisionSpaceSettings>> =>
+  adminOnly(context, getDecisionSpaceSettings)
+);
+resolver.define('saveDecisionSpaces', ({ context, payload }): Promise<ResolverResult<DecisionSpaceSettings>> =>
+  adminOnly(context, async () => {
+    await saveDecisionSpaces((payload as { spaceKeys?: unknown }).spaceKeys);
+    return getDecisionSpaceSettings();
+  })
 );
 
 /* ---------- Issue context panel ---------- */

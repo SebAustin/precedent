@@ -13,8 +13,8 @@ import {
   readDecisionPage,
   setDecisionStatus,
 } from '../confluence/decisionPages';
+import { readResolutions, writeResolutions } from './store';
 import {
-  EMPTY_RESOLUTIONS,
   type Resolution,
   type ResolutionKind,
   type ResolutionState,
@@ -24,7 +24,6 @@ import {
 } from './resolutions';
 import { completeSupersession, draftSupersedingDecision } from './supersession';
 
-export const RESOLUTIONS_PROPERTY = 'precedent-resolutions';
 const JSON_HEADERS = { Accept: 'application/json', 'Content-Type': 'application/json' };
 
 export interface PanelState {
@@ -37,23 +36,6 @@ export interface ResolveRequest {
   readonly kind: ResolutionKind;
   readonly pageId: string;
   readonly note?: string;
-}
-
-async function readResolutions(issueKey: string): Promise<ResolutionState> {
-  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${RESOLUTIONS_PROPERTY}`);
-  if (res.status === 404) return EMPTY_RESOLUTIONS;
-  await expectOk(res, `Read resolutions for ${issueKey}`);
-  const { value } = (await res.json()) as { value: ResolutionState };
-  return value?.version === 1 ? value : EMPTY_RESOLUTIONS;
-}
-
-async function writeResolutions(issueKey: string, state: ResolutionState): Promise<void> {
-  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${RESOLUTIONS_PROPERTY}`, {
-    method: 'PUT',
-    headers: JSON_HEADERS,
-    body: JSON.stringify(state),
-  });
-  await expectOk(res, `Store resolution for ${issueKey}`);
 }
 
 /** Adds a link on the issue to a Confluence page (idempotent per globalId). */
@@ -79,9 +61,30 @@ function draftUrls(state: ResolutionState): Record<string, string | undefined> {
   );
 }
 
+/**
+ * Which of these Decision pages can the *viewer* read? Checks run as the user,
+ * so Confluence's own permissions decide. Any failure counts as unreadable
+ * (fail closed): a Precedent is never shown to someone who can't open it.
+ */
+async function readablePageIds(pageIds: readonly string[]): Promise<Set<string>> {
+  const checks = await Promise.all(
+    pageIds.map(async (id) => {
+      try {
+        const res = await api.asUser().requestConfluence(route`/wiki/api/v2/pages/${id}`);
+        return res.ok ? id : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return new Set(checks.filter((id): id is string => id !== null));
+}
+
 export async function getPanelState(issueKey: string): Promise<PanelState> {
   const [check, state] = await Promise.all([readCheckResult(issueKey), readResolutions(issueKey)]);
-  return { check, view: annotateVerdicts(check?.verdicts ?? [], state), drafts: draftUrls(state) };
+  const verdicts = check?.verdicts ?? [];
+  const readable = await readablePageIds([...new Set(verdicts.map((v) => v.pageId))]);
+  return { check, view: annotateVerdicts(verdicts, state, readable), drafts: draftUrls(state) };
 }
 
 async function supersede(issueKey: string, pageId: string): Promise<string> {

@@ -4,10 +4,20 @@
  *   → Haiku Verdicts with Citations → Sonnet explanation for Conflicts only
  *   → store on the issue.
  */
+import { readResolutions } from '../resolve/store';
+import { buildConflictComment, conflictsToAnnounce } from './announce';
 import { classify, explainConflict } from './llm';
 import { contentHash } from './proposal';
 import { rankCandidates } from './rank';
-import { fetchDecisionRecords, fetchProposal, getDecisionSpaces, readCheckResult, writeCheckResult } from './site';
+import {
+  announceConflicts,
+  fetchDecisionRecords,
+  fetchProposal,
+  getDecisionSpaces,
+  readAnnounced,
+  readCheckResult,
+  writeCheckResult,
+} from './site';
 import type { CheckResult, CitedVerdict, DecisionRecord, Proposal } from './types';
 
 export interface CheckOptions {
@@ -55,5 +65,17 @@ export async function checkProposal(issueKey: string, options: CheckOptions = {}
     verdicts: [...explained].sort(byImportance),
   };
   await writeCheckResult(issueKey, result);
+  await announceNewConflicts(issueKey, result);
   return result;
+}
+
+/** One comment per newly found Conflict; failures here never lose the stored Verdicts. */
+async function announceNewConflicts(issueKey: string, result: CheckResult): Promise<void> {
+  try {
+    const [announced, resolutions] = await Promise.all([readAnnounced(issueKey), readResolutions(issueKey)]);
+    const fresh = conflictsToAnnounce(result.verdicts, announced, resolutions);
+    if (fresh.length > 0) await announceConflicts(issueKey, buildConflictComment(fresh.length), fresh, announced);
+  } catch (error: unknown) {
+    console.warn(`Precedent: could not announce conflicts on ${issueKey}`, error instanceof Error ? error.message : error);
+  }
 }

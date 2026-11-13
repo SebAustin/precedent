@@ -5,6 +5,7 @@
  */
 import api, { route } from '@forge/api';
 import { createDecisionPage } from '../confluence/decisionPages';
+import { assertCurrentUserIsJiraAdmin } from '../security/admin';
 import { SAMPLE_DECISIONS, SAMPLE_PROJECT, SAMPLE_PROPOSALS, SAMPLE_SPACE } from './lumenPay';
 import { type RemoveAction, SAMPLE_MARKER, type SeedAction, type WorkspaceState } from './plan';
 
@@ -126,22 +127,10 @@ async function createDecision(spaceId: string, key: string): Promise<void> {
 }
 
 /**
- * Project creation needs `manage:jira-project`, which Forge does not grant to
- * user-impersonated (asUser) calls, so it runs asApp. To keep the app from
- * doing anything the clicking user couldn't, we first require that user to be
- * a Jira administrator.
+ * Project creation needs `manage:jira-configuration`, which Forge does not
+ * grant to user-impersonated (asUser) calls, so it runs asApp — only after
+ * confirming the clicking user is a Jira administrator.
  */
-async function assertCurrentUserIsJiraAdmin(): Promise<void> {
-  const res = await api.asUser().requestJira(route`/rest/api/3/mypermissions?permissions=ADMINISTER`);
-  const { permissions } = await readJson<{ permissions: { ADMINISTER?: { havePermission: boolean } } }>(
-    res,
-    'Check Jira admin permission'
-  );
-  if (!permissions.ADMINISTER?.havePermission) {
-    throw new Error('Only Jira administrators can load the Sample Workspace.');
-  }
-}
-
 async function createProject(): Promise<void> {
   await assertCurrentUserIsJiraAdmin();
   const me = await readJson<{ accountId: string }>(
