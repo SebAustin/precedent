@@ -4,6 +4,7 @@ import { checkProposal } from '../check/service';
 import { type PanelState, type ResolveRequest, getPanelState, resolveConflict } from '../resolve/service';
 import { assertAdminCall } from '../security/admin';
 import { type BylineState, getBylineState } from '../byline/service';
+import { type DecisionPeople, getDecisionPeople } from '../graph/service';
 import { type DecisionSpaceSettings, getDecisionSpaceSettings, saveDecisionSpaces } from '../settings/store';
 import type { WorkspaceSummary } from '../sample/plan';
 import { getSampleWorkspace, removeSampleWorkspace, seedNextItem } from '../sample/service';
@@ -94,6 +95,17 @@ resolver.define('resolveConflict', ({ context, payload }): Promise<ResolverResul
     const ctx = context as IssueContext;
     if (!ctx.accountId) throw new Error('You need to be signed in to resolve a conflict.');
     return resolveConflict(issueKeyFrom(ctx), ctx.accountId, toResolveRequest(payload));
+  })
+);
+
+/* ---------- Teamwork Graph: who knows about a Decision (issue panel) ---------- */
+
+resolver.define('getDecisionPeople', ({ context, payload }): Promise<ResolverResult<DecisionPeople>> =>
+  attempt(() => {
+    const cloudId = (context as { cloudId?: unknown }).cloudId;
+    const pageId = (payload as { pageId?: unknown }).pageId;
+    if (typeof cloudId !== 'string' || typeof pageId !== 'string') throw new Error('Missing site or decision reference.');
+    return getDecisionPeople(cloudId, pageId);
   })
 );
 

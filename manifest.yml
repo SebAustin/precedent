@@ -184,6 +184,10 @@ permissions:
     # Resolutions: comment on superseded Decisions
     - write:comment:confluence
     - read:confluence-content.summary
+    # Teamwork Graph (optional enrichment, ADR 0002)
+    - read:graph:page:confluence
+    - read:graph:user:atlassian
+    - read:graph:team:atlassian
 app:
   runtime:
     name: nodejs24.x
