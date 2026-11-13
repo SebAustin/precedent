@@ -1,8 +1,7 @@
 import Resolver from '@forge/resolver';
 import { type ProposalEvalResult, SAMPLE_PROPOSAL_KEYS, evaluateSampleProposal } from '../check/sampleEval';
 import { checkProposal } from '../check/service';
-import { readCheckResult } from '../check/site';
-import type { CheckResult } from '../check/types';
+import { type PanelState, type ResolveRequest, getPanelState, resolveConflict } from '../resolve/service';
 import type { WorkspaceSummary } from '../sample/plan';
 import { getSampleWorkspace, removeSampleWorkspace, seedNextItem } from '../sample/service';
 import { type ResolverResult, attempt } from './result';
@@ -10,7 +9,19 @@ import { type ResolverResult, attempt } from './result';
 export type { ResolverResult } from './result';
 
 interface IssueContext {
+  readonly accountId?: string;
   readonly extension?: { readonly issue?: { readonly key?: string } };
+}
+
+const RESOLUTION_KINDS: readonly string[] = ['Acknowledge', 'Dismiss', 'Supersede'];
+
+/** Validates the untrusted resolver payload at the boundary. */
+function toResolveRequest(payload: unknown): ResolveRequest {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  if (typeof p.kind !== 'string' || !RESOLUTION_KINDS.includes(p.kind)) throw new Error('Unknown resolution.');
+  if (typeof p.pageId !== 'string' || !/^\d+$/.test(p.pageId)) throw new Error('Invalid decision reference.');
+  const note = typeof p.note === 'string' ? p.note.slice(0, 500) : undefined;
+  return { kind: p.kind as ResolveRequest['kind'], pageId: p.pageId, ...(note ? { note } : {}) };
 }
 
 function issueKeyFrom(context: IssueContext): string {
@@ -40,11 +51,22 @@ resolver.define('evalSampleProposal', ({ payload }): Promise<ResolverResult<Prop
 
 /* ---------- Issue context panel ---------- */
 
-resolver.define('getCheck', ({ context }): Promise<ResolverResult<CheckResult | null>> =>
-  attempt(() => readCheckResult(issueKeyFrom(context as IssueContext)))
+resolver.define('getPanel', ({ context }): Promise<ResolverResult<PanelState>> =>
+  attempt(() => getPanelState(issueKeyFrom(context as IssueContext)))
 );
-resolver.define('checkNow', ({ context }): Promise<ResolverResult<CheckResult>> =>
-  attempt(() => checkProposal(issueKeyFrom(context as IssueContext), { force: true }))
+resolver.define('checkNow', ({ context }): Promise<ResolverResult<PanelState>> =>
+  attempt(async () => {
+    const issueKey = issueKeyFrom(context as IssueContext);
+    await checkProposal(issueKey, { force: true });
+    return getPanelState(issueKey);
+  })
+);
+resolver.define('resolveConflict', ({ context, payload }): Promise<ResolverResult<PanelState>> =>
+  attempt(() => {
+    const ctx = context as IssueContext;
+    if (!ctx.accountId) throw new Error('You need to be signed in to resolve a conflict.');
+    return resolveConflict(issueKeyFrom(ctx), ctx.accountId, toResolveRequest(payload));
+  })
 );
 
 export const handler = resolver.getDefinitions();

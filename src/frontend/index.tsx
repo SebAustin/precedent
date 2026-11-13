@@ -1,104 +1,85 @@
 import React, { useEffect, useState } from 'react';
-import ForgeReconciler, {
-  Box,
-  Button,
-  Inline,
-  Link,
-  Lozenge,
-  SectionMessage,
-  Spinner,
-  Stack,
-  Text,
-  xcss,
-} from '@forge/react';
-import type { CheckResult, CitedVerdict } from '../check/types';
+import ForgeReconciler, { Button, Inline, Lozenge, SectionMessage, Spinner, Stack, Text } from '@forge/react';
+import type { ResolutionKind } from '../resolve/resolutions';
+import type { PanelState } from '../resolve/service';
 import { call } from './invokeResult';
+import { VerdictCard } from './VerdictCard';
 
-const quoteStyle = xcss({
-  borderLeftWidth: 'border.width.selected',
-  borderLeftStyle: 'solid',
-  borderLeftColor: 'color.border',
-  paddingInlineStart: 'space.100',
-});
+function Summary({ state }: { state: PanelState }) {
+  const { openConflicts, verdicts } = state.view;
+  const resolved = verdicts.filter((v) => v.verdict === 'Conflicts' && v.resolution).length;
+  const related = verdicts.filter((v) => v.verdict === 'Related').length;
 
-function Summary({ result }: { result: CheckResult }) {
-  const conflicts = result.verdicts.filter((v) => v.verdict === 'Conflicts').length;
-  const related = result.verdicts.length - conflicts;
-
-  if (conflicts > 0) {
-    return <Lozenge appearance="removed" isBold>{`${conflicts} conflict${conflicts > 1 ? 's' : ''} with past decisions`}</Lozenge>;
+  if (openConflicts > 0) {
+    return (
+      <Lozenge appearance="removed" isBold>
+        {`${openConflicts} conflict${openConflicts > 1 ? 's' : ''} with past decisions`}
+      </Lozenge>
+    );
   }
+  if (resolved > 0) return <Lozenge appearance="success">All conflicts resolved</Lozenge>;
   if (related > 0) return <Lozenge appearance="inprogress">{`${related} related decision${related > 1 ? 's' : ''}`}</Lozenge>;
+  if (state.view.dismissedCount > 0) return <Lozenge appearance="success">No open conflicts</Lozenge>;
   return <Lozenge appearance="success">No precedent found</Lozenge>;
 }
 
-function VerdictCard({ verdict }: { verdict: CitedVerdict }) {
-  const isConflict = verdict.verdict === 'Conflicts';
-  const body = (
-    <Stack space="space.100">
-      <Link href={`/wiki/pages/viewpage.action?pageId=${verdict.pageId}`} openNewTab>
-        {verdict.title}
-      </Link>
-      <Box xcss={quoteStyle}>
-        <Text>“{verdict.citation}”</Text>
-      </Box>
-      <Text>{verdict.explanation ?? verdict.reason}</Text>
-      <Text size="small" color="color.text.subtle">
-        Decided {verdict.decidedOn} by {verdict.deciders.join(', ')}
-      </Text>
-    </Stack>
-  );
-
-  return isConflict ? (
-    <SectionMessage appearance="error" title="Conflicts with an accepted decision">
-      {body}
-    </SectionMessage>
-  ) : (
-    <SectionMessage appearance="information" title="Related decision">
-      {body}
-    </SectionMessage>
-  );
-}
-
 const App = () => {
-  const [result, setResult] = useState<CheckResult | null | undefined>(undefined);
-  const [isChecking, setIsChecking] = useState(false);
+  const [state, setState] = useState<PanelState | undefined>(undefined);
+  const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    call<CheckResult | null>('getCheck').then(setResult, (e: Error) => setError(e.message));
+    call<PanelState>('getPanel').then(setState, (e: Error) => setError(e.message));
   }, []);
 
-  const handleCheck = async () => {
-    setIsChecking(true);
+  const run = async (work: () => Promise<PanelState>, failure: string) => {
+    setIsBusy(true);
     setError(null);
     try {
-      setResult(await call<CheckResult>('checkNow'));
+      setState(await work());
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Check failed');
+      setError(e instanceof Error ? e.message : failure);
     } finally {
-      setIsChecking(false);
+      setIsBusy(false);
     }
   };
 
-  if (result === undefined && !error) return <Spinner label="Loading Precedent" />;
+  const handleCheck = () => run(() => call<PanelState>('checkNow'), 'Check failed');
+  const handleResolve = (pageId: string) => (kind: ResolutionKind, note?: string) =>
+    run(() => call<PanelState>('resolveConflict', { kind, pageId, note }), 'Could not save your response');
 
+  if (state === undefined && !error) return <Spinner label="Loading Precedent" />;
+
+  const check = state?.check;
   return (
     <Stack space="space.200">
-      {result ? <Summary result={result} /> : <Text>This issue hasn't been checked yet.</Text>}
+      {state && check ? <Summary state={state} /> : <Text>This issue hasn't been checked yet.</Text>}
       {error && (
-        <SectionMessage appearance="warning" title="Precedent couldn't check this issue">
+        <SectionMessage appearance="warning" title="Precedent couldn't complete that">
           <Text>{error}</Text>
         </SectionMessage>
       )}
-      {result?.verdicts.map((v) => <VerdictCard key={v.pageId} verdict={v} />)}
+      {state?.view.verdicts.map((v) => (
+        <VerdictCard
+          key={v.pageId}
+          verdict={v}
+          draftUrl={state.drafts[v.pageId]}
+          isBusy={isBusy}
+          onResolve={handleResolve(v.pageId)}
+        />
+      ))}
+      {state && state.view.dismissedCount > 0 && (
+        <Text size="small" color="color.text.subtlest">
+          {`${state.view.dismissedCount} dismissed conflict${state.view.dismissedCount > 1 ? 's' : ''} hidden`}
+        </Text>
+      )}
       <Inline space="space.100" alignBlock="center">
-        <Button onClick={handleCheck} isDisabled={isChecking}>
-          {isChecking ? 'Checking…' : result ? 'Check again' : 'Check now'}
+        <Button onClick={handleCheck} isDisabled={isBusy}>
+          {isBusy ? 'Working…' : check ? 'Check again' : 'Check now'}
         </Button>
-        {result && (
+        {check && (
           <Text size="small" color="color.text.subtlest">
-            Checked {new Date(result.checkedAt).toLocaleString()}
+            Checked {new Date(check.checkedAt).toLocaleString()}
           </Text>
         )}
       </Inline>
@@ -111,4 +92,3 @@ ForgeReconciler.render(
     <App />
   </React.StrictMode>
 );
-

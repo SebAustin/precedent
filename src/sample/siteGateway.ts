@@ -4,8 +4,7 @@
  * e.g. only admins can create projects — are enforced by Atlassian, not us.
  */
 import api, { route } from '@forge/api';
-import { DECISION_LABEL } from '../domain/decision';
-import { renderDecisionPage } from '../domain/decisionPage';
+import { createDecisionPage } from '../confluence/decisionPages';
 import { SAMPLE_DECISIONS, SAMPLE_PROJECT, SAMPLE_PROPOSALS, SAMPLE_SPACE } from './lumenPay';
 import { type RemoveAction, SAMPLE_MARKER, type SeedAction, type WorkspaceState } from './plan';
 
@@ -122,25 +121,8 @@ async function createSpace(): Promise<void> {
 async function createDecision(spaceId: string, key: string): Promise<void> {
   const decision = SAMPLE_DECISIONS.find((d) => d.key === key);
   if (!decision) throw new Error(`Unknown sample Decision "${key}"`);
-
-  const res = await api.asUser().requestConfluence(route`/wiki/api/v2/pages`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({
-      spaceId,
-      status: 'current',
-      title: decision.title,
-      body: { representation: 'storage', value: renderDecisionPage(decision) },
-    }),
-  });
-  const { id } = await readJson<{ id: string }>(res, `Create Decision "${decision.title}"`);
-
-  const label = await api.asUser().requestConfluence(route`/wiki/rest/api/content/${id}/label`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify([{ prefix: 'global', name: DECISION_LABEL }]),
-  });
-  await expectOk(label, `Label Decision "${decision.title}"`);
+  const { key: _key, ...content } = decision;
+  await createDecisionPage('user', spaceId, content);
 }
 
 /**

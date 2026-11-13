@@ -23,6 +23,10 @@ modules:
         - avi:jira:updated:issue
       filter:
         ignoreSelf: true
+    - key: precedent-supersession-trigger
+      function: supersession-trigger
+      events:
+        - avi:confluence:updated:page
   llm:
     - key: precedent-llm
       model:
@@ -32,6 +36,8 @@ modules:
       handler: index.handler
     - key: check-trigger
       handler: index.onIssueEvent
+    - key: supersession-trigger
+      handler: index.onDecisionPageUpdated
 resources:
   - key: main
     path: src/frontend/index.tsx
@@ -59,6 +65,9 @@ permissions:
     - read:confluence-content.all
     # Settings (Decision Spaces)
     - storage:app
+    # Resolutions: comment on superseded Decisions
+    - write:comment:confluence
+    - read:confluence-content.summary
 app:
   runtime:
     name: nodejs24.x

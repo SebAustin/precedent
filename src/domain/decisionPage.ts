@@ -6,7 +6,7 @@
  * page normally in Confluence; Precedent parses it back. Parsing is tolerant of
  * the whitespace and <p> wrappers Confluence's editor adds.
  */
-import { type Decision, isDecisionStatus } from './decision';
+import { type Decision, type DecisionStatus, isDecisionStatus } from './decision';
 
 export type ParseResult =
   | { readonly ok: true; readonly decision: Decision }
@@ -128,4 +128,14 @@ export function parseDecisionPage(title: string, body: string): ParseResult {
       ...(supersedes ? { supersedes } : {}),
     },
   };
+}
+
+/**
+ * Returns the page body with only the Status cell changed, so everything else
+ * a human wrote on the page is preserved.
+ */
+export function withStatus(body: string, status: DecisionStatus): string {
+  const statusRow = /(<th[^>]*>\s*(?:<p[^>]*>)?\s*Status\s*(?:<\/p>)?\s*<\/th>\s*<td[^>]*>)[\s\S]*?(<\/td>)/;
+  if (!statusRow.test(body)) throw new Error('Decision page has no Status property to change.');
+  return body.replace(statusRow, `$1${escapeXml(status)}$2`);
 }

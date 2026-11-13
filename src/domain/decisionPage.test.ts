@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { Decision } from './decision';
-import { parseDecisionPage, renderDecisionPage } from './decisionPage';
+import { parseDecisionPage, renderDecisionPage, withStatus } from './decisionPage';
 
 const mongoDecision: Decision = {
   title: 'Postgres for all transactional data',
@@ -117,5 +117,42 @@ describe('parseDecisionPage', () => {
     const result = parseDecisionPage(mongoDecision.title, body);
 
     expect(result.ok && result.decision.rationale).toBe('R&D <fast>');
+  });
+});
+
+describe('withStatus', () => {
+  test('changes only the Status cell and keeps human-added content', () => {
+    const body = `${renderDecisionPage(mongoDecision)}<h2>Discussion</h2><p>Notes added by a human.</p>`;
+
+    const updated = withStatus(body, 'Superseded');
+
+    expect(parseDecisionPage(mongoDecision.title, updated)).toEqual({
+      ok: true,
+      decision: { ...mongoDecision, status: 'Superseded' },
+    });
+    expect(updated).toContain('<p>Notes added by a human.</p>');
+  });
+
+  test('handles paragraph-wrapped cells written by the Confluence editor', () => {
+    const body = '<table><tbody><tr><th><p>Status</p></th><td><p>Accepted</p></td></tr></tbody></table>';
+
+    expect(withStatus(body, 'Superseded')).toBe(
+      '<table><tbody><tr><th><p>Status</p></th><td>Superseded</td></tr></tbody></table>'
+    );
+  });
+
+  test('handles cells rewritten by the Confluence editor with local-id attributes', () => {
+    // Captured from the dev site after a human edited the page in the editor.
+    const body =
+      '<table data-layout="default" ac:local-id="d9ec87c95243"><tbody><tr ac:local-id="4802c2a0bbea"><th ac:local-id="89d5dd67cef0"><p local-id="6dedaf1cf39d">Status</p></th><td ac:local-id="cca8767bb798"><p local-id="eb8ffd8226fa">Accepted</p></td></tr></tbody></table>';
+
+    const updated = withStatus(body, 'Superseded');
+
+    expect(updated).toContain('<td ac:local-id="cca8767bb798">Superseded</td>');
+    expect(updated).toContain('<p local-id="6dedaf1cf39d">Status</p>');
+  });
+
+  test('throws when the page has no Status property to change', () => {
+    expect(() => withStatus('<p>No table</p>', 'Superseded')).toThrow('no Status property');
   });
 });
