@@ -9,9 +9,9 @@ import ForgeReconciler, {
   Stack,
   Text,
 } from '@forge/react';
-import { invoke } from '@forge/bridge';
-import type { ResolverResult } from '../resolvers';
 import type { WorkspaceStatus, WorkspaceSummary } from '../sample/plan';
+import { EvalSection } from './EvalSection';
+import { call } from './invokeResult';
 
 type Phase = 'idle' | 'seeding' | 'confirmRemove' | 'removing';
 
@@ -22,31 +22,24 @@ const STATUS_LABEL: Record<WorkspaceStatus, { text: string; appearance: 'default
   blocked: { text: 'Blocked', appearance: 'removed' },
 };
 
-async function call(name: string): Promise<WorkspaceSummary> {
-  const raw = await invoke<ResolverResult<WorkspaceSummary>>(name);
-  const result = (typeof raw === 'object' && raw !== null && 'body' in raw ? raw.body : raw) as ResolverResult<WorkspaceSummary>;
-  if (!result.ok) throw new Error(result.error);
-  return result.data;
-}
-
 const App = () => {
   const [summary, setSummary] = useState<WorkspaceSummary | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    call('getSampleWorkspace').then(setSummary, (e: Error) => setError(e.message));
+    call<WorkspaceSummary>('getSampleWorkspace').then(setSummary, (e: Error) => setError(e.message));
   }, []);
 
   const handleLoad = async () => {
     setPhase('seeding');
     setError(null);
     try {
-      let current = await call('seedSampleStep');
+      let current = await call<WorkspaceSummary>('seedSampleStep');
       setSummary(current);
       while (current.status === 'partial' || current.status === 'empty') {
         const before = current.created;
-        current = await call('seedSampleStep');
+        current = await call<WorkspaceSummary>('seedSampleStep');
         setSummary(current);
         if (current.created === before) throw new Error('Seeding made no progress; check the app logs.');
       }
@@ -61,7 +54,7 @@ const App = () => {
     setPhase('removing');
     setError(null);
     try {
-      setSummary(await call('removeSampleWorkspace'));
+      setSummary(await call<WorkspaceSummary>('removeSampleWorkspace'));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Removal failed');
     } finally {
@@ -130,6 +123,8 @@ const App = () => {
           </Button>
         </Inline>
       )}
+
+      <EvalSection isEnabled={summary?.status === 'complete'} />
     </Stack>
   );
 };

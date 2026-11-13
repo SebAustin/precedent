@@ -1,11 +1,12 @@
 modules:
-  jira:issuePanel:
-    - key: precedent-issue-panel
+  jira:issueContext:
+    - key: precedent-issue-context
       resource: main
       resolver:
         function: resolver
       render: native
       title: Precedent
+      label: Precedent
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
   jira:adminPage:
     - key: precedent-admin
@@ -14,9 +15,23 @@ modules:
         function: resolver
       render: native
       title: Precedent
+  trigger:
+    - key: precedent-check-trigger
+      function: check-trigger
+      events:
+        - avi:jira:created:issue
+        - avi:jira:updated:issue
+      filter:
+        ignoreSelf: true
+  llm:
+    - key: precedent-llm
+      model:
+        - claude
   function:
     - key: resolver
       handler: index.handler
+    - key: check-trigger
+      handler: index.onIssueEvent
 resources:
   - key: main
     path: src/frontend/index.tsx
@@ -39,6 +54,11 @@ permissions:
     - write:page:confluence
     - write:confluence-content
     - write:confluence-space
+    # Checking: search and read Decision pages as the app
+    - search:confluence
+    - read:confluence-content.all
+    # Settings (Decision Spaces)
+    - storage:app
 app:
   runtime:
     name: nodejs24.x
