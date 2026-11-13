@@ -8,6 +8,8 @@ modules:
       title: Precedent
       label: Precedent
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      dynamicProperties:
+        function: issue-context-status
   jira:adminPage:
     - key: precedent-admin
       resource: admin
@@ -152,6 +154,8 @@ modules:
       handler: index.draftSupersessionAction
     - key: byline-properties
       handler: index.bylineProperties
+    - key: issue-context-status
+      handler: index.issueContextStatus
 resources:
   - key: main
     path: src/frontend/index.tsx

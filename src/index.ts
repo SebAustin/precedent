@@ -8,3 +8,4 @@ export {
   findPrecedentsAction,
 } from './agent/actions';
 export { bylineProperties } from './byline/service';
+export { issueContextStatus } from './check/statusHandler';
