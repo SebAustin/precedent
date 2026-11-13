@@ -87,6 +87,21 @@ describe('parseVerdicts', () => {
     expect(result.map((r) => r.verdict)).toEqual(['Conflicts']);
   });
 
+  test('reports why each non-None verdict was rejected', () => {
+    const rejected: string[] = [];
+
+    parseVerdicts(
+      call([
+        { decision_id: '101', verdict: 'Related', citation: 'MongoDB is banned forever', reason: 'r' },
+        { decision_id: '101', verdict: 'None', citation: '', reason: 'r' },
+      ]),
+      candidates,
+      (why) => rejected.push(why)
+    );
+
+    expect(rejected).toEqual(['101 Related: citation not found in statement: "MongoDB is banned forever"']);
+  });
+
   test('returns nothing for malformed tool output', () => {
     expect(parseVerdicts(null, candidates)).toEqual([]);
     expect(parseVerdicts({ verdicts: 'nope' }, candidates)).toEqual([]);

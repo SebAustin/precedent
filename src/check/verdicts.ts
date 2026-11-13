@@ -33,17 +33,34 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function toCitedVerdict(item: unknown, byId: ReadonlyMap<string, DecisionRecord>): CitedVerdict | null {
+/** Receives a human-readable reason whenever a shown-type verdict is discarded. */
+export type RejectionListener = (reason: string) => void;
+
+function toCitedVerdict(
+  item: unknown,
+  byId: ReadonlyMap<string, DecisionRecord>,
+  onRejected: RejectionListener
+): CitedVerdict | null {
   if (!isRecord(item)) return null;
 
-  const record = byId.get(str(item.decision_id));
+  const id = str(item.decision_id);
+  const record = byId.get(id);
   const verdict = str(item.verdict);
   const citation = str(item.citation);
-  if (!record || !SHOWN.includes(verdict)) return null;
+  if (!SHOWN.includes(verdict)) return null;
+  if (!record) {
+    onRejected(`${id} ${verdict}: unknown decision id`);
+    return null;
+  }
 
   const normalizedCitation = normalize(citation);
-  if (normalizedCitation.length < MIN_CITATION_LENGTH) return null;
-  if (!normalize(record.decision.statement).includes(normalizedCitation)) return null;
+  if (
+    normalizedCitation.length < MIN_CITATION_LENGTH ||
+    !normalize(record.decision.statement).includes(normalizedCitation)
+  ) {
+    onRejected(`${id} ${verdict}: citation not found in statement: "${citation}"`);
+    return null;
+  }
 
   return {
     pageId: record.pageId,
@@ -56,7 +73,11 @@ function toCitedVerdict(item: unknown, byId: ReadonlyMap<string, DecisionRecord>
   };
 }
 
-export function parseVerdicts(toolArguments: unknown, candidates: readonly DecisionRecord[]): CitedVerdict[] {
+export function parseVerdicts(
+  toolArguments: unknown,
+  candidates: readonly DecisionRecord[],
+  onRejected: RejectionListener = () => undefined
+): CitedVerdict[] {
   const args = asObject(toolArguments);
   if (!args || !Array.isArray(args.verdicts)) return [];
 
@@ -65,7 +86,7 @@ export function parseVerdicts(toolArguments: unknown, candidates: readonly Decis
   const result: CitedVerdict[] = [];
 
   for (const item of args.verdicts) {
-    const cited = toCitedVerdict(item, byId);
+    const cited = toCitedVerdict(item, byId, onRejected);
     if (cited && !seen.has(cited.pageId)) {
       seen.add(cited.pageId);
       result.push(cited);

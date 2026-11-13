@@ -11,12 +11,18 @@ export const EXPLAIN_MODEL = 'claude-sonnet-4-6';
 export const RECORD_TOOL = 'record_verdicts';
 
 const CLASSIFY_SYSTEM = `You check planned engineering work (a "Proposal") against decisions a team has already made.
-For EACH candidate decision, choose exactly one verdict:
+For EACH candidate decision, first ask: "What does this decision govern?" — a technology choice, an architecture boundary,
+a process rule (when/how work ships), or a constraint (where data may live, which tool must be used). Then ask:
+"Does the Proposal change or schedule something inside that governed area?" Choose exactly one verdict:
 - "Conflicts": doing the Proposal as written would contradict the decision or reopen it (e.g. adopting something the decision rules out, or violating a constraint it sets).
-- "Related": the Proposal is about the same topic and is consistent with the decision, or follows it.
-- "None": the decision is not meaningfully about what the Proposal does.
+- "Related": the Proposal acts inside the governed area and complies with the decision. This includes Proposals that
+  follow the rule without naming it — e.g. a release planned for a day the rule allows, or work done with the mandated tool.
+  The decision's owners would want to see it as context.
+- "None": the Proposal does not act inside the area the decision governs.
 Rules:
-- Be precise. Shared words alone are not enough for Conflicts or Related.
+- Judge by subject, not vocabulary. Incidental shared words (generic terms like "internal", "new", "data", "service",
+  "team") never justify Conflicts or Related. If the decision's owners would shrug at the Proposal, it is None.
+- When unsure between Related and None, choose None. When unsure between Conflicts and Related, explain the risk in "reason" and choose Conflicts only if the Proposal as written would break the decision.
 - "citation" MUST be copied word-for-word from the decision's Statement: a short contiguous phrase (5-25 words) that shows why the verdict applies. Never paraphrase.
 - "reason" is one sentence, written for the engineer who filed the Proposal.
 - Return one entry per candidate decision via the ${RECORD_TOOL} tool.`;

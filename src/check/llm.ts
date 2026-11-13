@@ -13,7 +13,9 @@ export async function classify(proposal: Proposal, candidates: readonly Decision
     console.warn('Precedent: classifier returned no tool call', response.choices[0]?.finish_reason);
     return [];
   }
-  return parseVerdicts(toolCall.function.arguments, candidates);
+  return parseVerdicts(toolCall.function.arguments, candidates, (why) =>
+    console.warn(`Precedent: rejected verdict for ${proposal.issueKey}: ${why}`)
+  );
 }
 
 function textOf(content: unknown): string {
