@@ -3,6 +3,7 @@ import { type ProposalEvalResult, SAMPLE_PROPOSAL_KEYS, evaluateSampleProposal }
 import { checkProposal } from '../check/service';
 import { type PanelState, type ResolveRequest, getPanelState, resolveConflict } from '../resolve/service';
 import { assertAdminCall } from '../security/admin';
+import { type BylineState, getBylineState } from '../byline/service';
 import { type DecisionSpaceSettings, getDecisionSpaceSettings, saveDecisionSpaces } from '../settings/store';
 import type { WorkspaceSummary } from '../sample/plan';
 import { getSampleWorkspace, removeSampleWorkspace, seedNextItem } from '../sample/service';
@@ -94,6 +95,12 @@ resolver.define('resolveConflict', ({ context, payload }): Promise<ResolverResul
     if (!ctx.accountId) throw new Error('You need to be signed in to resolve a conflict.');
     return resolveConflict(issueKeyFrom(ctx), ctx.accountId, toResolveRequest(payload));
   })
+);
+
+/* ---------- Confluence byline on Decision pages ---------- */
+
+resolver.define('getByline', ({ context }): Promise<ResolverResult<BylineState>> =>
+  attempt(() => getBylineState((context as { extension?: { content?: { id?: unknown } } }).extension?.content?.id))
 );
 
 export const handler = resolver.getDefinitions();

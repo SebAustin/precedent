@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import ForgeReconciler, { Button, Inline, Lozenge, SectionMessage, Spinner, Stack, Text } from '@forge/react';
 import type { ResolutionKind } from '../resolve/resolutions';
 import type { PanelState } from '../resolve/service';
+import { rovo, view } from '@forge/bridge';
 import { call } from './invokeResult';
 import { VerdictCard } from './VerdictCard';
 
@@ -45,6 +46,22 @@ const App = () => {
   };
 
   const handleCheck = () => run(() => call<PanelState>('checkNow'), 'Check failed');
+
+  /** Opens the Precedent Rovo agent in the chat sidebar, primed with this issue. */
+  const handleAsk = async () => {
+    try {
+      const context = await view.getContext();
+      const issueKey = (context.extension as { issue?: { key?: string } }).issue?.key ?? 'this issue';
+      await rovo.open({
+        type: 'forge',
+        agentKey: 'precedent-agent',
+        agentName: 'Precedent',
+        prompt: `Explain the precedent check for ${issueKey} and what I should do about it.`,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Rovo is not available on this site');
+    }
+  };
   const handleResolve = (pageId: string) => (kind: ResolutionKind, note?: string) =>
     run(() => call<PanelState>('resolveConflict', { kind, pageId, note }), 'Could not save your response');
 
@@ -81,6 +98,9 @@ const App = () => {
       <Inline space="space.100" alignBlock="center">
         <Button onClick={handleCheck} isDisabled={isBusy}>
           {isBusy ? 'Working…' : check ? 'Check again' : 'Check now'}
+        </Button>
+        <Button appearance="subtle" onClick={handleAsk}>
+          Ask Precedent
         </Button>
         {check && (
           <Text size="small" color="color.text.subtlest">

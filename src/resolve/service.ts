@@ -66,7 +66,7 @@ function draftUrls(state: ResolutionState): Record<string, string | undefined> {
  * so Confluence's own permissions decide. Any failure counts as unreadable
  * (fail closed): a Precedent is never shown to someone who can't open it.
  */
-async function readablePageIds(pageIds: readonly string[]): Promise<Set<string>> {
+export async function readablePageIds(pageIds: readonly string[]): Promise<Set<string>> {
   const checks = await Promise.all(
     pageIds.map(async (id) => {
       try {

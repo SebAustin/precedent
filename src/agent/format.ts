@@ -1,0 +1,66 @@
+/**
+ * Plain-text answers for the Rovo agent. The agent rephrases them, so they are
+ * written to be complete and unambiguous rather than pretty.
+ */
+import type { CitedVerdict, DecisionRecord } from '../check/types';
+import type { AnnotatedVerdict, VerdictView } from '../resolve/resolutions';
+
+const pageLink = (pageId: string): string => `/wiki/pages/viewpage.action?pageId=${pageId}`;
+
+export function formatPrecedents(topic: string, records: readonly DecisionRecord[]): string {
+  if (records.length === 0) return `No accepted decisions in the Decision Spaces match "${topic}".`;
+
+  const lines = records.map(({ pageId, decision: d }, i) =>
+    [
+      `${i + 1}. "${d.title}" (${d.status}, decided ${d.decidedOn} by ${d.deciders.join(', ') || 'unknown'})`,
+      `   Decision: ${d.statement}`,
+      `   Why: ${d.rationale}`,
+      `   Link: ${pageLink(pageId)}`,
+    ].join('\n')
+  );
+  return `Accepted decisions relevant to "${topic}":\n${lines.join('\n')}`;
+}
+
+function describeVerdict(v: AnnotatedVerdict): string {
+  const status = v.resolution
+    ? ` [${v.resolution.kind === 'Acknowledge' ? 'acknowledged' : 'supersession proposed'}]`
+    : '';
+  return [
+    `- "${v.title}"${status} — decided ${v.decidedOn} by ${v.deciders.join(', ')}`,
+    `  Quote: "${v.citation}"`,
+    `  ${v.explanation ?? v.reason}`,
+    `  Link: ${pageLink(v.pageId)}`,
+  ].join('\n');
+}
+
+export function formatCheckForAgent(issueKey: string, view: VerdictView): string {
+  const conflicts = view.verdicts.filter((v) => v.verdict === 'Conflicts');
+  const related = view.verdicts.filter((v) => v.verdict === 'Related');
+  const hidden =
+    view.hiddenCount > 0 ? `\n(${view.hiddenCount} more decision(s) are in spaces you cannot access.)` : '';
+
+  if (conflicts.length === 0 && related.length === 0) {
+    return `${issueKey} does not conflict with or relate to any accepted decision you can access.${hidden}`;
+  }
+
+  const sections = [
+    conflicts.length > 0 &&
+      `CONFLICTS with accepted decisions:\n${conflicts.map(describeVerdict).join('\n')}\n` +
+        'For each open conflict the user can acknowledge it (the work respects the decision), dismiss it (not really a conflict, needs a reason), or propose superseding the decision.',
+    related.length > 0 && `RELATED decisions (consistent, useful context):\n${related.map(describeVerdict).join('\n')}`,
+  ].filter(Boolean);
+
+  return `Precedent check for ${issueKey}:\n${sections.join('\n\n')}${hidden}`;
+}
+
+/** Resolves a Decision title the user typed (or the agent paraphrased) to one Verdict. */
+export function findVerdictByTitle<T extends CitedVerdict>(verdicts: readonly T[], title: string): T | undefined {
+  const wanted = title.trim().toLowerCase();
+  if (wanted.length === 0) return undefined;
+
+  const exact = verdicts.find((v) => v.title.toLowerCase() === wanted);
+  if (exact) return exact;
+
+  const partial = verdicts.filter((v) => v.title.toLowerCase().includes(wanted));
+  return partial.length === 1 ? partial[0] : undefined;
+}

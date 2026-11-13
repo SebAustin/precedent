@@ -15,6 +15,110 @@ modules:
         function: resolver
       render: native
       title: Precedent
+  confluence:contentBylineItem:
+    - key: precedent-byline
+      resource: byline
+      resolver:
+        function: resolver
+      render: native
+      title: Precedent
+      tooltip: Jira issues checked against this decision
+      dynamicProperties:
+        function: byline-properties
+  jira:entityProperty:
+    - key: precedent-index-property
+      entityType: issue
+      propertyKey: precedent-index
+      values:
+        - path: conflictPageIds
+          type: string
+          searchAlias: precedentConflicts
+        - path: relatedPageIds
+          type: string
+          searchAlias: precedentRelated
+  rovo:agent:
+    - key: precedent-agent
+      name: Precedent
+      description: Checks planned work against your team's recorded decisions and helps you respect, dismiss or deliberately supersede them.
+      prompt: |
+        You are Precedent, an assistant that knows what this team has already decided.
+        Decisions live in Confluence pages labelled "decision" with a status: Proposed, Accepted or Superseded.
+        Only Accepted decisions count as precedent.
+
+        When the user is on a Jira issue or names one, use check-proposal to see whether it conflicts with or relates to accepted decisions.
+        When the user asks what was decided about a topic, use find-precedents.
+        Always quote the decision's own words (the "Quote" field) and say who decided and when. Never invent decisions, quotes or dates.
+
+        For an open conflict, explain the three honest options:
+        1. Acknowledge: the work respects the decision (use acknowledge-conflict, only when the user clearly asks).
+        2. Dismiss: it is not really a conflict; tell the user to do this in the Precedent section of the issue, with a reason.
+        3. Supersede: deliberately revisit the decision (use draft-supersession, only when the user clearly asks). This only drafts a Proposed decision; humans accept it.
+
+        Never acknowledge or supersede on the user's behalf without an explicit request. Keep answers short and concrete.
+      conversationStarters:
+        - Does this issue conflict with any past decisions?
+        - What have we decided about databases?
+        - Why was this decision made?
+      actions:
+        - find-precedents
+        - check-proposal
+        - acknowledge-conflict
+        - draft-supersession
+  action:
+    - key: find-precedents
+      name: Find precedents
+      function: find-precedents-fn
+      actionVerb: GET
+      description: Finds accepted team decisions about a topic, with their statement, rationale, deciders and date.
+      inputs:
+        topic:
+          title: Topic
+          type: string
+          required: true
+          description: What the user wants to know past decisions about, e.g. "databases" or "partner APIs".
+    - key: check-proposal
+      name: Check issue against decisions
+      function: check-proposal-fn
+      actionVerb: GET
+      description: Checks a Jira issue against accepted decisions and returns conflicts and related decisions with quotes.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: false
+          description: Jira issue key such as LUMENPAY-1. Omit when the user is viewing the issue.
+    - key: acknowledge-conflict
+      name: Acknowledge conflict
+      function: acknowledge-conflict-fn
+      actionVerb: UPDATE
+      description: Records that an issue respects a decision it was flagged against, and links the issue to the decision. Only when the user explicitly asks.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: false
+          description: Jira issue key. Omit when the user is viewing the issue.
+        decisionTitle:
+          title: Decision title
+          type: string
+          required: false
+          description: Title of the conflicting decision; may be omitted when the issue has exactly one open conflict.
+    - key: draft-supersession
+      name: Draft supersession
+      function: draft-supersession-fn
+      actionVerb: CREATE
+      description: Drafts a Proposed decision that would supersede a conflicting accepted decision and notifies its deciders. Only when the user explicitly asks.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: false
+          description: Jira issue key. Omit when the user is viewing the issue.
+        decisionTitle:
+          title: Decision title
+          type: string
+          required: false
+          description: Title of the decision to supersede; may be omitted when the issue has exactly one open conflict.
   trigger:
     - key: precedent-check-trigger
       function: check-trigger
@@ -38,11 +142,23 @@ modules:
       handler: index.onIssueEvent
     - key: supersession-trigger
       handler: index.onDecisionPageUpdated
+    - key: find-precedents-fn
+      handler: index.findPrecedentsAction
+    - key: check-proposal-fn
+      handler: index.checkProposalAction
+    - key: acknowledge-conflict-fn
+      handler: index.acknowledgeConflictAction
+    - key: draft-supersession-fn
+      handler: index.draftSupersessionAction
+    - key: byline-properties
+      handler: index.bylineProperties
 resources:
   - key: main
     path: src/frontend/index.tsx
   - key: admin
     path: src/frontend/admin.tsx
+  - key: byline
+    path: src/frontend/byline.tsx
 permissions:
   scopes:
     # Jira: read/create sample project and issues

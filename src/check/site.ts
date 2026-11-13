@@ -7,6 +7,7 @@ import api, { route } from '@forge/api';
 import { DECISION_LABEL } from '../domain/decision';
 import { parseDecisionPage } from '../domain/decisionPage';
 import { adfToText } from './proposal';
+import { SEARCH_INDEX_PROPERTY, buildSearchIndex } from './searchIndex';
 import type { CheckResult, DecisionRecord, Proposal } from './types';
 
 export const CHECK_PROPERTY = 'precedent-check';
@@ -67,6 +68,14 @@ export async function writeCheckResult(issueKey: string, result: CheckResult): P
     body: JSON.stringify(result),
   });
   await failIfNotOk(res, `Store check result for ${issueKey}`);
+
+  // Flat copy that Jira indexes for JQL, powering the Decision page byline.
+  const index = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${SEARCH_INDEX_PROPERTY}`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(buildSearchIndex(result)),
+  });
+  await failIfNotOk(index, `Index check result for ${issueKey}`);
 }
 
 export const ANNOUNCED_PROPERTY = 'precedent-announced';
