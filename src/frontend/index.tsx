@@ -87,7 +87,9 @@ const App = () => {
       ))}
       {state && state.view.hiddenCount > 0 && (
         <Text size="small" color="color.text.subtlest">
-          {`${state.view.hiddenCount} related decision${state.view.hiddenCount > 1 ? 's are' : ' is'} in a space you can't access`}
+          {/* Neutral on purpose: a hidden Decision may be a Conflict (and still count in the
+              sidebar lozenge), so don't call it "related". */}
+          {`${state.view.hiddenCount} matching decision${state.view.hiddenCount > 1 ? 's are' : ' is'} in a space you can't access`}
         </Text>
       )}
       {state && state.view.dismissedCount > 0 && (

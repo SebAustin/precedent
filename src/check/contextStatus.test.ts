@@ -1,5 +1,77 @@
 import { describe, expect, test } from 'vitest';
-import { contextStatus } from './contextStatus';
+import { EMPTY_RESOLUTIONS, type Resolution, type ResolutionState } from '../resolve/resolutions';
+import { contextStatus, statusCounts } from './contextStatus';
+import type { CheckResult, CitedVerdict } from './types';
+
+const conflict = (pageId: string): CitedVerdict => ({
+  pageId,
+  title: `Decision ${pageId}`,
+  verdict: 'Conflicts',
+  citation: 'quote',
+  reason: 'r',
+  decidedOn: '2026-03-04',
+  deciders: ['Priya Nair'],
+});
+const related = (pageId: string): CitedVerdict => ({ ...conflict(pageId), verdict: 'Related' });
+
+const checked = (verdicts: CitedVerdict[]): CheckResult => ({
+  version: 1,
+  contentHash: 'h',
+  checkedAt: '2026-11-12T10:00:00.000Z',
+  candidatesConsidered: verdicts.length,
+  verdicts,
+});
+
+const resolved = (...entries: [string, Resolution['kind']][]): ResolutionState => ({
+  version: 1,
+  resolutions: Object.fromEntries(
+    entries.map(([pageId, kind]) => [pageId, { kind, pageId, accountId: 'acc-1', at: '2026-11-12T10:00:00.000Z' }])
+  ),
+});
+
+describe('statusCounts', () => {
+  test('reports an unchecked issue as unchecked, with nothing counted', () => {
+    expect(statusCounts(null, EMPTY_RESOLUTIONS)).toEqual({
+      isChecked: false,
+      openConflicts: 0,
+      resolvedConflicts: 0,
+      related: 0,
+    });
+  });
+
+  test('counts unresolved Conflicts as open and Related verdicts separately', () => {
+    expect(statusCounts(checked([conflict('1'), conflict('2'), related('3')]), EMPTY_RESOLUTIONS)).toEqual({
+      isChecked: true,
+      openConflicts: 2,
+      resolvedConflicts: 0,
+      related: 1,
+    });
+  });
+
+  test('counts acknowledged and superseded Conflicts as resolved', () => {
+    const counts = statusCounts(
+      checked([conflict('1'), conflict('2'), conflict('3')]),
+      resolved(['1', 'Acknowledge'], ['2', 'Supersede'])
+    );
+    expect(counts).toMatchObject({ openConflicts: 1, resolvedConflicts: 2 });
+  });
+
+  test('leaves dismissed Conflicts out entirely, so they never turn the lozenge red or green', () => {
+    expect(statusCounts(checked([conflict('1')]), resolved(['1', 'Dismiss']))).toMatchObject({
+      isChecked: true,
+      openConflicts: 0,
+      resolvedConflicts: 0,
+    });
+  });
+
+  test('ignores resolutions for Decisions the latest check no longer flags', () => {
+    expect(statusCounts(checked([related('9')]), resolved(['1', 'Acknowledge']))).toMatchObject({
+      openConflicts: 0,
+      resolvedConflicts: 0,
+      related: 1,
+    });
+  });
+});
 
 describe('contextStatus', () => {
   test('shows open conflicts loudly', () => {
