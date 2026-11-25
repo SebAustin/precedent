@@ -3,7 +3,7 @@
  * written to be complete and unambiguous rather than pretty.
  */
 import type { CitedVerdict, DecisionRecord } from '../check/types';
-import type { AnnotatedVerdict, VerdictView } from '../resolve/resolutions';
+import type { AnnotatedVerdict, ResolutionView } from '../resolve/resolutions';
 
 const pageLink = (pageId: string): string => `/wiki/pages/viewpage.action?pageId=${pageId}`;
 
@@ -33,11 +33,11 @@ function describeVerdict(v: AnnotatedVerdict): string {
   ].join('\n');
 }
 
-export function formatCheckForAgent(issueKey: string, view: VerdictView): string {
+export function formatCheckForAgent(issueKey: string, view: ResolutionView): string {
   const conflicts = view.verdicts.filter((v) => v.verdict === 'Conflicts');
   const related = view.verdicts.filter((v) => v.verdict === 'Related');
   const hidden =
-    view.hiddenCount > 0 ? `\n(${view.hiddenCount} more decision(s) are in spaces you cannot access.)` : '';
+    view.counts.hidden > 0 ? `\n(${view.counts.hidden} more decision(s) are in spaces you cannot access.)` : '';
 
   if (conflicts.length === 0 && related.length === 0) {
     return `${issueKey} does not conflict with or relate to any accepted decision you can access.${hidden}`;

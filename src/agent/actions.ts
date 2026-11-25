@@ -3,10 +3,13 @@
  * issue panel, so the agent can never do anything the panel can't — and every
  * answer is filtered to Decisions the asking user can read.
  */
+import { NeedsAuthenticationError } from '@forge/api';
 import { rankCandidates } from '../check/rank';
 import { checkProposal } from '../check/service';
-import { fetchDecisionRecords, getDecisionSpaces, readCheckResult } from '../check/site';
-import { type PanelState, getPanelState, readablePageIds, resolveConflict } from '../resolve/service';
+import { fetchDecisionRecords, getDecisionSpaces } from '../check/site';
+import { forgeResolution, readableDecisionIds } from '../resolve/forgeSite';
+import type { Viewer } from '../resolve/resolution';
+import type { ResolutionView } from '../resolve/resolutions';
 import { findVerdictByTitle, formatCheckForAgent, formatPrecedents } from './format';
 import { resolveIssueKey } from './inputs';
 
@@ -45,6 +48,9 @@ async function safely(action: string, work: () => Promise<string>): Promise<stri
     console.info(`Precedent action ${action} answered (${answer.length} chars)`);
     return answer;
   } catch (error: unknown) {
+    // Missing consent must escape so Forge can ask the Viewer to "Allow access";
+    // swallowing it would make every as-Viewer check look like "no access".
+    if (error instanceof NeedsAuthenticationError) throw error;
     const message = error instanceof Error ? error.message : 'Unexpected error';
     console.error(`Precedent action ${action} failed:`, message);
     return `Precedent could not complete that: ${message}`;
@@ -58,36 +64,46 @@ export function findPrecedentsAction(payload: ActionPayload): Promise<string> {
 
     const records = await fetchDecisionRecords(await getDecisionSpaces());
     const ranked = rankCandidates({ issueKey: 'topic', summary: topic, description: '' }, records);
-    const readable = await readablePageIds(ranked.map((r) => r.pageId));
+    const readable = await readableDecisionIds(ranked.map((r) => r.pageId));
     return formatPrecedents(topic, ranked.filter((r) => readable.has(r.pageId)));
   });
 }
 
-export function checkProposalAction(payload: ActionPayload): Promise<string> {
+function viewerFrom(payload: ActionPayload, context: ActionContext | undefined): Viewer {
+  return { accountId: accountIdFrom(payload, context) };
+}
+
+export function checkProposalAction(payload: ActionPayload, context?: ActionContext): Promise<string> {
   return safely('check-proposal', async () => {
     const issueKey = issueKeyFrom(payload);
-    if (!(await readCheckResult(issueKey))) await checkProposal(issueKey);
-    const state = await getPanelState(issueKey);
-    return formatCheckForAgent(issueKey, state.view);
+    const viewer = viewerFrom(payload, context);
+    // viewFor first: it refuses issues the Viewer can't open, before any (paid) LLM check runs.
+    let view = await forgeResolution.viewFor(issueKey, viewer);
+    if (!view.isChecked) {
+      await checkProposal(issueKey);
+      view = await forgeResolution.viewFor(issueKey, viewer);
+    }
+    return formatCheckForAgent(issueKey, view);
   });
 }
 
+/** Chat names Decisions by title; matching that title to one open Conflict is this adapter's job. */
 async function resolveByTitle(
   payload: ActionPayload,
   context: ActionContext | undefined,
   kind: 'Acknowledge' | 'Supersede'
-): Promise<PanelState & { title: string }> {
+): Promise<{ view: ResolutionView; title: string; pageId: string }> {
   const issueKey = issueKeyFrom(payload);
-  const accountId = accountIdFrom(payload, context);
-  const state = await getPanelState(issueKey);
-  const openConflicts = state.view.verdicts.filter((v) => v.verdict === 'Conflicts' && !v.resolution);
+  const viewer = viewerFrom(payload, context);
+  const current = await forgeResolution.viewFor(issueKey, viewer);
+  const openConflicts = current.verdicts.filter((v) => v.verdict === 'Conflicts' && !v.resolution);
   const target = findVerdictByTitle(openConflicts, str(payload.decisionTitle)) ?? (openConflicts.length === 1 ? openConflicts[0] : undefined);
   if (!target) {
     const names = openConflicts.map((v) => `"${v.title}"`).join(', ') || 'none';
     throw new Error(`Which decision? Open conflicts on ${issueKey}: ${names}.`);
   }
-  const next = await resolveConflict(issueKey, accountId, { kind, pageId: target.pageId });
-  return { ...next, title: target.title };
+  const view = await forgeResolution.resolve(issueKey, viewer, { kind, pageId: target.pageId });
+  return { view, title: target.title, pageId: target.pageId };
 }
 
 export function acknowledgeConflictAction(payload: ActionPayload, context?: ActionContext): Promise<string> {
@@ -100,11 +116,10 @@ export function acknowledgeConflictAction(payload: ActionPayload, context?: Acti
 export function draftSupersessionAction(payload: ActionPayload, context?: ActionContext): Promise<string> {
   return safely('draft-supersession', async () => {
     const result = await resolveByTitle(payload, context, 'Supersede');
-    const target = result.view.verdicts.find((v) => v.title === result.title);
-    const draft = target ? result.drafts[target.pageId] : undefined;
+    const draft = result.view.drafts[result.pageId];
     return (
       `Drafted a Proposed decision to supersede "${result.title}"${draft ? ` (${draft})` : ''}. ` +
-      'The original stays Accepted until someone rewrites the draft and sets it to Accepted; its deciders were notified with a comment.'
+      'The original stays Accepted until someone rewrites the draft and sets it to Accepted; a note was left on the original decision.'
     );
   });
 }

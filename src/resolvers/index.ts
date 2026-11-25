@@ -1,7 +1,9 @@
 import Resolver from '@forge/resolver';
 import { type ProposalEvalResult, SAMPLE_PROPOSAL_KEYS, evaluateSampleProposal } from '../check/sampleEval';
 import { checkProposal } from '../check/service';
-import { type PanelState, type ResolveRequest, getPanelState, resolveConflict } from '../resolve/service';
+import { forgeResolution } from '../resolve/forgeSite';
+import type { ResolveRequest, Viewer } from '../resolve/resolution';
+import type { ResolutionView } from '../resolve/resolutions';
 import { assertAdminCall } from '../security/admin';
 import { type BylineState, getBylineState } from '../byline/service';
 import { type DecisionPeople, getDecisionPeople } from '../graph/service';
@@ -27,6 +29,12 @@ function toResolveRequest(payload: unknown): ResolveRequest {
   if (typeof p.pageId !== 'string' || !/^\d+$/.test(p.pageId)) throw new Error('Invalid decision reference.');
   const note = typeof p.note === 'string' ? p.note.slice(0, 500) : undefined;
   return { kind: p.kind as ResolveRequest['kind'], pageId: p.pageId, ...(note ? { note } : {}) };
+}
+
+/** The signed-in person using the issue panel. */
+function viewerFrom(context: IssueContext): Viewer {
+  if (!context.accountId) throw new Error('You need to be signed in to use Precedent.');
+  return { accountId: context.accountId };
 }
 
 function issueKeyFrom(context: IssueContext): string {
@@ -80,21 +88,27 @@ resolver.define('saveDecisionSpaces', ({ context, payload }): Promise<ResolverRe
 
 /* ---------- Issue context panel ---------- */
 
-resolver.define('getPanel', ({ context }): Promise<ResolverResult<PanelState>> =>
-  attempt(() => getPanelState(issueKeyFrom(context as IssueContext)))
-);
-resolver.define('checkNow', ({ context }): Promise<ResolverResult<PanelState>> =>
-  attempt(async () => {
-    const issueKey = issueKeyFrom(context as IssueContext);
-    await checkProposal(issueKey, { force: true });
-    return getPanelState(issueKey);
-  })
-);
-resolver.define('resolveConflict', ({ context, payload }): Promise<ResolverResult<PanelState>> =>
+// Thin adapter over the Resolution module: turn the resolver context and
+// payload into viewFor / resolve calls. The rules live in the module.
+resolver.define('getPanel', ({ context }): Promise<ResolverResult<ResolutionView>> =>
   attempt(() => {
     const ctx = context as IssueContext;
-    if (!ctx.accountId) throw new Error('You need to be signed in to resolve a conflict.');
-    return resolveConflict(issueKeyFrom(ctx), ctx.accountId, toResolveRequest(payload));
+    return forgeResolution.viewFor(issueKeyFrom(ctx), viewerFrom(ctx));
+  })
+);
+resolver.define('checkNow', ({ context }): Promise<ResolverResult<ResolutionView>> =>
+  attempt(async () => {
+    // The panel only renders for Viewers who can open the issue, so no extra access check before the LLM call.
+    const ctx = context as IssueContext;
+    const issueKey = issueKeyFrom(ctx);
+    await checkProposal(issueKey, { force: true });
+    return forgeResolution.viewFor(issueKey, viewerFrom(ctx));
+  })
+);
+resolver.define('resolveConflict', ({ context, payload }): Promise<ResolverResult<ResolutionView>> =>
+  attempt(() => {
+    const ctx = context as IssueContext;
+    return forgeResolution.resolve(issueKeyFrom(ctx), viewerFrom(ctx), toResolveRequest(payload));
   })
 );
 
@@ -104,7 +118,9 @@ resolver.define('getDecisionPeople', ({ context, payload }): Promise<ResolverRes
   attempt(() => {
     const cloudId = (context as { cloudId?: unknown }).cloudId;
     const pageId = (payload as { pageId?: unknown }).pageId;
-    if (typeof cloudId !== 'string' || typeof pageId !== 'string') throw new Error('Missing site or decision reference.');
+    if (typeof cloudId !== 'string' || typeof pageId !== 'string' || !/^\d+$/.test(pageId)) {
+      throw new Error('Missing site or decision reference.');
+    }
     return getDecisionPeople(cloudId, pageId);
   })
 );

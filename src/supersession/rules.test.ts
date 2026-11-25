@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { Decision } from '../domain/decision';
-import { completeSupersession, draftSupersedingDecision } from './supersession';
+import { completeSupersession, draftSupersedingDecision } from './rules';
 
 const old: Decision = {
   title: 'Customer PII stays in the EU region',

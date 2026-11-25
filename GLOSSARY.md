@@ -46,6 +46,10 @@ _Avoid_: Evidence, source
 A Confluence space an admin has chosen as a source of Decisions. Precedent ignores Decisions outside Decision Spaces.
 _Avoid_: Source, repository
 
+**Viewer**:
+The person using Precedent at a given moment, in the issue panel or through the Rovo agent. A Viewer only ever sees, and can only resolve, Decisions and issues they themselves can access.
+_Avoid_: user, caller, requester
+
 ## Resolving
 
 **Resolution**:

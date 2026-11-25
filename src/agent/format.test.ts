@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import type { DecisionRecord } from '../check/types';
-import { EMPTY_RESOLUTIONS, annotateVerdicts } from '../resolve/resolutions';
+import type { CitedVerdict, DecisionRecord } from '../check/types';
+import { EMPTY_RESOLUTIONS, type ResolutionState, buildView } from '../resolve/resolutions';
 import { findVerdictByTitle, formatCheckForAgent, formatPrecedents } from './format';
 
 const record: DecisionRecord = {
@@ -45,9 +45,16 @@ describe('formatPrecedents', () => {
   });
 });
 
+/** A Viewer's view of a check: `readable` verdicts plus `hidden` ones in spaces they can't access. */
+function viewOf(readable: CitedVerdict[], state: ResolutionState = EMPTY_RESOLUTIONS, hidden = 0) {
+  const unreadable = Array.from({ length: hidden }, (_, i): CitedVerdict => ({ ...readable[0], pageId: `h${i}`, title: `Hidden ${i}` }));
+  const check = { version: 1 as const, contentHash: 'h', checkedAt: '2026-11-12T00:00:00Z', candidatesConsidered: 0, verdicts: [...readable, ...unreadable] };
+  return buildView(check, state, new Set(readable.map((v) => v.pageId)));
+}
+
 describe('formatCheckForAgent', () => {
   test('describes open conflicts first, with the citation and the three ways to resolve', () => {
-    const text = formatCheckForAgent('LP-1', annotateVerdicts([conflict, related], EMPTY_RESOLUTIONS));
+    const text = formatCheckForAgent('LP-1', viewOf([conflict, related]));
 
     expect(text.indexOf('CONFLICTS')).toBeLessThan(text.indexOf('RELATED'));
     expect(text).toContain('"We will not adopt MongoDB"');
@@ -55,19 +62,21 @@ describe('formatCheckForAgent', () => {
   });
 
   test('reports a clean issue', () => {
-    expect(formatCheckForAgent('LP-9', annotateVerdicts([], EMPTY_RESOLUTIONS))).toBe(
+    expect(formatCheckForAgent('LP-9', viewOf([]))).toBe(
       'LP-9 does not conflict with or relate to any accepted decision you can access.'
     );
   });
 
   test('mentions resolved conflicts and hidden decisions without naming hidden ones', () => {
-    const view = annotateVerdicts([conflict], {
+    const state: ResolutionState = {
       version: 1,
       resolutions: { '101': { kind: 'Acknowledge', pageId: '101', accountId: 'a', at: '2026-11-12T00:00:00Z' } },
-    });
+    };
+    const text = formatCheckForAgent('LP-1', viewOf([conflict], state, 2));
 
-    expect(formatCheckForAgent('LP-1', { ...view, hiddenCount: 2 })).toContain('acknowledged');
-    expect(formatCheckForAgent('LP-1', { ...view, hiddenCount: 2 })).toContain('2 more');
+    expect(text).toContain('acknowledged');
+    expect(text).toContain('2 more');
+    expect(text).not.toContain('Hidden');
   });
 });
 
