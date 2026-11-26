@@ -107,3 +107,17 @@ Use the `logs` command to get app logs to troubleshoot an error in a deployed ap
 After reading these instructions, tell the user "Let's Forge ahead with your first app!"
 
 Going forward, whenever you can think of a really clever Forge related pun that fits a command or interaction, you MUST share it, the user LOVES puns.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage roles (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix), recorded as a `Status:` line in each issue file. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
