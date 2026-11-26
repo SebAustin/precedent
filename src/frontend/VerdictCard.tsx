@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Button, Inline, Link, SectionMessage, Stack, Text, Textfield, User, xcss } from '@forge/react';
+import { Box, Button, Inline, Link, Lozenge, SectionMessage, Stack, Text, Textfield, User, xcss } from '@forge/react';
 import type { DecisionPeople } from '../graph/service';
 import type { AnnotatedVerdict, ResolutionKind } from '../resolve/resolutions';
 import { call } from './invokeResult';
@@ -116,7 +116,48 @@ function ResolutionControls({ isBusy, onResolve }: Pick<Props, 'isBusy' | 'onRes
   );
 }
 
+const decisionHref = (verdict: AnnotatedVerdict): string =>
+  verdict.url ?? `/wiki/pages/viewpage.action?pageId=${verdict.pageId}`;
+
+/**
+ * A Lapsed Verdict (GLOSSARY.md): its Decision is no longer a Precedent. Shown
+ * quietly and never resolvable; a Supersede recorded on it reads as the success
+ * it was, since that Supersession is what made the Verdict lapse.
+ */
+function LapsedCard({ verdict }: { verdict: AnnotatedVerdict }) {
+  const lapse = verdict.lapsed;
+  const why =
+    lapse?.reason === 'Superseded'
+      ? lapse.supersededBy
+        ? `This decision was superseded by “${lapse.supersededBy}”.`
+        : 'This decision was superseded.'
+      : 'This decision is no longer an accepted decision.';
+  const r = verdict.resolution;
+  return (
+    <Stack space="space.050">
+      <Inline space="space.100" alignBlock="center" shouldWrap>
+        <Lozenge>No longer accepted</Lozenge>
+        <Link href={decisionHref(verdict)} openNewTab>
+          {verdict.title}
+        </Link>
+      </Inline>
+      <Text size="small" color="color.text.subtle">
+        {why}
+      </Text>
+      {r?.kind === 'Supersede' && lapse?.reason === 'Superseded' && (
+        <Inline space="space.050" alignBlock="center" shouldWrap>
+          <Text size="small">Superseded as proposed from this issue by</Text>
+          <User accountId={r.accountId} />
+          <Text size="small">on {new Date(r.at).toLocaleDateString()}.</Text>
+        </Inline>
+      )}
+    </Stack>
+  );
+}
+
 export function VerdictCard({ verdict, draftUrl, isBusy, onResolve }: Props) {
+  if (verdict.lapsed) return <LapsedCard verdict={verdict} />;
+
   const isConflict = verdict.verdict === 'Conflicts';
   const isOpenConflict = isConflict && !verdict.resolution;
   const appearance = isOpenConflict ? 'error' : isConflict ? 'success' : 'information';
@@ -129,7 +170,7 @@ export function VerdictCard({ verdict, draftUrl, isBusy, onResolve }: Props) {
   return (
     <SectionMessage appearance={appearance} title={title}>
       <Stack space="space.100">
-        <Link href={`/wiki/pages/viewpage.action?pageId=${verdict.pageId}`} openNewTab>
+        <Link href={decisionHref(verdict)} openNewTab>
           {verdict.title}
         </Link>
         <Box xcss={quoteStyle}>
@@ -140,6 +181,11 @@ export function VerdictCard({ verdict, draftUrl, isBusy, onResolve }: Props) {
         <Text size="small" color="color.text.subtle">
           Decided {verdict.decidedOn} by {verdict.deciders.join(', ')}
         </Text>
+        {verdict.isEdited && (
+          <Text size="small" color="color.text.warning">
+            This decision was edited since the last check. Use “Check again” to re-check against its current wording.
+          </Text>
+        )}
         <ResolvedNote verdict={verdict} draftUrl={draftUrl} />
         <WhoKnows pageId={verdict.pageId} />
         {isOpenConflict && <ResolutionControls isBusy={isBusy} onResolve={onResolve} />}

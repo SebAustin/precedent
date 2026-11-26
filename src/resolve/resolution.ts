@@ -12,6 +12,8 @@
  * - Every Resolution kind first reads the Decision as the Viewer
  *   (CannotAccessDecision) — before validation, so a hidden Decision can't be
  *   probed — then validation runs before any write.
+ * - A Lapsed Verdict (its Decision is no longer a Precedent) is shown but never
+ *   resolvable (DecisionLapsed).
  * - A Resolution is final (AlreadyResolved).
  * - Supersede: create the draft → record the Resolution → then, best effort,
  *   note it on the original Decision and link the issue to the draft.
@@ -67,9 +69,9 @@ export function createResolution(site: ResolutionSite): ResolutionModule {
   }
 
   async function currentView(issueKey: string): Promise<ResolutionView> {
-    const { check, resolutions } = await site.readRecord(issueKey);
+    const { check, resolutions, failure } = await site.readRecord(issueKey);
     const pageIds = [...new Set((check?.verdicts ?? []).map((v) => v.pageId))];
-    return buildView(check, resolutions, await site.readableDecisionIds(pageIds));
+    return buildView(check, resolutions, await site.readDecisionStandings(pageIds), failure);
   }
 
   async function readableDecision(pageId: string): Promise<DecisionRef> {
@@ -107,6 +109,8 @@ export function createResolution(site: ResolutionSite): ResolutionModule {
       };
 
       const decision = await readableDecision(request.pageId);
+      // A Decision that stopped being a Precedent since the Check can't be resolved against.
+      if (decision.decision?.status !== 'Accepted') throw new ResolutionError('DecisionLapsed');
       recordResolution(resolutions, verdicts, base); // validate before any write
 
       if (request.kind === 'Acknowledge') {

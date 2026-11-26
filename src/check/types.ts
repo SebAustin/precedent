@@ -14,6 +14,10 @@ export interface Proposal {
 export interface DecisionRecord {
   readonly pageId: string;
   readonly decision: Decision;
+  /** Confluence page version when it was read; lets a Verdict notice later edits. */
+  readonly version?: number;
+  /** Absolute link to the page, when the search returned one. */
+  readonly url?: string;
 }
 
 export type ShownVerdict = 'Conflicts' | 'Related';
@@ -32,6 +36,17 @@ export interface CitedVerdict {
   readonly deciders: readonly string[];
   /** Longer explanation, only written for Conflicts. */
   readonly explanation?: string;
+  /** The Decision page version the Verdict was judged against. */
+  readonly decisionVersion?: number;
+  /** Set when the Decision is no longer a Precedent (a Lapsed Verdict, GLOSSARY.md). */
+  readonly lapsed?: Lapse;
+}
+
+/** Why a Verdict lapsed: its Decision was Superseded, or otherwise stopped being a Precedent. */
+export interface Lapse {
+  readonly reason: 'Superseded' | 'NotAPrecedent';
+  /** Title of the Accepted Decision that replaced it, when known. */
+  readonly supersededBy?: string;
 }
 
 /** What Precedent stores on the issue after a check. */
@@ -41,4 +56,8 @@ export interface CheckResult {
   readonly checkedAt: string;
   readonly candidatesConsidered: number;
   readonly verdicts: readonly CitedVerdict[];
+  /** How many Accepted Decisions were in the Decision Spaces (absent on older Checks). */
+  readonly decisionsInScope?: number;
+  /** Fingerprint of the Decisions in scope; a change means the Check is out of date. */
+  readonly decisionsFingerprint?: string;
 }

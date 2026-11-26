@@ -18,6 +18,11 @@ describe('conflictsToAnnounce', () => {
     expect(conflictsToAnnounce([verdict('1', 'Conflicts'), verdict('2', 'Related')], [], EMPTY_RESOLUTIONS)).toEqual(['1']);
   });
 
+  test('never announces a Lapsed Verdict', () => {
+    const lapsed: CitedVerdict = { ...verdict('1', 'Conflicts'), lapsed: { reason: 'Superseded' } };
+    expect(conflictsToAnnounce([lapsed], [], EMPTY_RESOLUTIONS)).toEqual([]);
+  });
+
   test('skips Conflicts already announced', () => {
     expect(conflictsToAnnounce([verdict('1', 'Conflicts')], ['1'], EMPTY_RESOLUTIONS)).toEqual([]);
   });

@@ -3,13 +3,16 @@
  * names the one it replaces. The old Decision only becomes Superseded when a
  * person sets the replacement to Accepted — Precedent never overrules a human.
  */
-import type { Decision } from '../domain/decision';
+import { DECISION_LABEL, type Decision } from '../domain/decision';
 import type { Proposal } from '../check/types';
+
+/** Starts every drafted statement; a person must replace it before the draft can be Accepted. */
+export const DRAFT_PREFIX = 'DRAFT — rewrite before accepting.';
 
 export function draftSupersedingDecision(old: Decision, proposal: Proposal, today: string): Decision {
   return {
     title: `Revisit: ${old.title} (${proposal.issueKey})`,
-    statement: `DRAFT — rewrite before accepting. Proposed change from ${proposal.issueKey}: ${proposal.summary}`,
+    statement: `${DRAFT_PREFIX} Proposed change from ${proposal.issueKey}: ${proposal.summary}`,
     rationale: `Raised by ${proposal.issueKey}. ${proposal.description}`.trim(),
     deciders: [],
     decidedOn: today,
@@ -25,7 +28,14 @@ export function draftSupersedingDecision(old: Decision, proposal: Proposal, toda
  */
 export function completeSupersession(replacement: Decision, old: Decision): Decision | null {
   if (replacement.status !== 'Accepted') return null;
+  // Accepting an unedited draft would make the placeholder text a Precedent.
+  if (replacement.statement.startsWith(DRAFT_PREFIX)) return null;
   if (replacement.supersedes !== old.title) return null;
   if (old.status !== 'Accepted') return null;
   return { ...old, status: 'Superseded' };
+}
+
+/** Only a Decision (labelled, in a Decision Space) may complete a Supersession. */
+export function isDecisionInScope(labels: readonly string[], spaceKey: string, decisionSpaces: readonly string[]): boolean {
+  return labels.includes(DECISION_LABEL) && decisionSpaces.includes(spaceKey);
 }

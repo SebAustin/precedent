@@ -36,11 +36,18 @@ export async function fetchDecisionRecords(spaceKeys: readonly string[]): Promis
   const cql = `type = page AND label = ${cqlString(DECISION_LABEL)} AND space in (${spaceKeys.map(cqlString).join(', ')})`;
   const res = await api
     .asApp()
-    .requestConfluence(route`/wiki/rest/api/content/search?cql=${cql}&expand=body.storage&limit=${MAX_DECISIONS}`);
+    .requestConfluence(route`/wiki/rest/api/content/search?cql=${cql}&expand=body.storage,version&limit=${MAX_DECISIONS}`);
   await failIfNotOk(res, 'Search Decisions');
 
-  const { results } = (await res.json()) as {
-    results: { id: string; title: string; body?: { storage?: { value?: string } } }[];
+  const { results, _links: links } = (await res.json()) as {
+    results: {
+      id: string;
+      title: string;
+      body?: { storage?: { value?: string } };
+      version?: { number?: number };
+      _links?: { webui?: string };
+    }[];
+    _links?: { base?: string };
   };
 
   return results.flatMap((page) => {
@@ -49,7 +56,8 @@ export async function fetchDecisionRecords(spaceKeys: readonly string[]): Promis
       console.warn(`Precedent: skipping malformed Decision "${page.title}": ${parsed.errors.join('; ')}`);
       return [];
     }
-    return [{ pageId: page.id, decision: parsed.decision }];
+    const url = links?.base && page._links?.webui ? `${links.base}${page._links.webui}` : undefined;
+    return [{ pageId: page.id, decision: parsed.decision, version: page.version?.number, url }];
   });
 }
 
@@ -78,6 +86,37 @@ export async function writeCheckResult(issueKey: string, result: CheckResult): P
   await failIfNotOk(index, `Index check result for ${issueKey}`);
 }
 
+/** Set when the latest Check failed; cleared when one completes. Never replaces the stored Check. */
+export const FAILURE_PROPERTY = 'precedent-check-failure';
+
+export interface CheckFailure {
+  readonly failedAt: string;
+}
+
+export async function readCheckFailure(issueKey: string): Promise<CheckFailure | null> {
+  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${FAILURE_PROPERTY}`);
+  if (res.status === 404) return null;
+  await failIfNotOk(res, `Read check failure for ${issueKey}`);
+  const { value } = (await res.json()) as { value: Partial<CheckFailure> };
+  return typeof value?.failedAt === 'string' ? { failedAt: value.failedAt } : null;
+}
+
+export async function writeCheckFailure(issueKey: string, failure: CheckFailure): Promise<void> {
+  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${FAILURE_PROPERTY}`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(failure),
+  });
+  await failIfNotOk(res, `Record check failure for ${issueKey}`);
+}
+
+export async function clearCheckFailure(issueKey: string): Promise<void> {
+  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${FAILURE_PROPERTY}`, {
+    method: 'DELETE',
+  });
+  if (res.status !== 404) await failIfNotOk(res, `Clear check failure for ${issueKey}`);
+}
+
 export const ANNOUNCED_PROPERTY = 'precedent-announced';
 
 export async function readAnnounced(issueKey: string): Promise<string[]> {
@@ -103,6 +142,22 @@ export async function announceConflicts(issueKey: string, comment: object, pageI
     body: JSON.stringify({ pageIds: [...previous, ...pageIds] }),
   });
   await failIfNotOk(store, `Remember announced conflicts for ${issueKey}`);
+}
+
+/**
+ * Issues whose stored Check has a live Conflict with this Decision, via the
+ * JQL-indexed `precedent-index` property. Runs as the app: it only feeds
+ * background re-checks, never anything shown to a person.
+ */
+export async function findIssuesConflictingWith(pageId: string, maxResults: number): Promise<string[]> {
+  const res = await api.asApp().requestJira(route`/rest/api/3/search/jql`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ jql: `precedentConflicts = ${cqlString(pageId)}`, fields: ['summary'], maxResults }),
+  });
+  await failIfNotOk(res, `Find issues conflicting with Decision ${pageId}`);
+  const { issues } = (await res.json()) as { issues: { key: string }[] };
+  return issues.map((i) => i.key);
 }
 
 export async function findIssueKeyBySummary(projectKey: string, summary: string): Promise<string | null> {

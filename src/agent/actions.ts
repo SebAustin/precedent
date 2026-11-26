@@ -11,7 +11,7 @@ import { forgeResolution, readableDecisionIds } from '../resolve/forgeSite';
 import type { Viewer } from '../resolve/resolution';
 import type { ResolutionView } from '../resolve/resolutions';
 import { findVerdictByTitle, formatCheckForAgent, formatPrecedents } from './format';
-import { resolveIssueKey } from './inputs';
+import { resolveIssueKey, wantsRecheck } from './inputs';
 
 const MAX_TOPIC_LENGTH = 300;
 
@@ -79,8 +79,10 @@ export function checkProposalAction(payload: ActionPayload, context?: ActionCont
     const viewer = viewerFrom(payload, context);
     // viewFor first: it refuses issues the Viewer can't open, before any (paid) LLM check runs.
     let view = await forgeResolution.viewFor(issueKey, viewer);
-    if (!view.isChecked) {
-      await checkProposal(issueKey);
+    // A fresh Check when asked for one; otherwise only if the issue was never checked.
+    const recheck = wantsRecheck(payload.recheck);
+    if (recheck || !view.isChecked) {
+      await checkProposal(issueKey, { force: recheck });
       view = await forgeResolution.viewFor(issueKey, viewer);
     }
     return formatCheckForAgent(issueKey, view);

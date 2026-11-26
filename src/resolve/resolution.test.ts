@@ -44,18 +44,34 @@ const decisionBody = (title: string): Decision => ({
   status: 'Accepted',
   tags: ['database'],
 });
-const decision = (id: string, title: string, readable: boolean): MemoryDecision => ({
+const decision = (id: string, title: string, readable: boolean, overrides: Partial<Decision> = {}, version = 1): MemoryDecision => ({
   readable,
-  ref: { id, title, spaceId: 'space-1', url: `https://site/wiki/${id}`, decision: decisionBody(title) },
+  version,
+  ref: { id, title, spaceId: 'space-1', url: `https://site/wiki/${id}`, decision: { ...decisionBody(title), ...overrides } },
 });
 
-function setup(overrides: { resolutions?: ResolutionState; checked?: boolean } = {}) {
+interface SetupOptions {
+  resolutions?: ResolutionState;
+  checked?: boolean;
+  check?: CheckResult;
+  postgres?: { status?: Decision['status']; version?: number };
+  failedAt?: string;
+}
+
+function setup(overrides: SetupOptions = {}) {
   const site = memorySite({
     viewableIssues: [ISSUE],
-    checks: overrides.checked === false ? {} : { [ISSUE]: check },
+    checks: overrides.checked === false ? {} : { [ISSUE]: overrides.check ?? check },
     resolutions: overrides.resolutions ? { [ISSUE]: overrides.resolutions } : {},
+    failures: overrides.failedAt ? { [ISSUE]: { failedAt: overrides.failedAt } } : {},
     decisions: [
-      decision('101', postgres.title, true),
+      decision(
+        '101',
+        postgres.title,
+        true,
+        overrides.postgres?.status ? { status: overrides.postgres.status } : {},
+        overrides.postgres?.version ?? 1
+      ),
       decision('202', rest.title, true),
       decision('303', secret.title, false),
     ],
@@ -91,12 +107,85 @@ describe('viewFor', () => {
 
   test('counts open Conflicts and Related Verdicts among what the Viewer can read', async () => {
     const view = await setup().resolution.viewFor(ISSUE, viewer);
-    expect(view.counts).toEqual({ open: 1, resolved: 0, related: 1, dismissed: 0, hidden: 1 });
+    expect(view.counts).toEqual({ open: 1, resolved: 0, related: 1, dismissed: 0, lapsed: 0, hidden: 1 });
     expect(view).toMatchObject({ isChecked: true, checkedAt: check.checkedAt });
   });
 });
 
+describe('viewFor: Lapsed Verdicts, edits and failed Checks', () => {
+  const supersededBy = (kind: 'Supersede' | 'Acknowledge'): ResolutionState => ({
+    version: 1,
+    resolutions: { '101': { kind, pageId: '101', accountId: 'acc-1', at: '2026-11-20T10:00:00.000Z', draftPageId: '9000' } },
+  });
+
+  test('a Conflict whose Decision was Superseded is Lapsed: shown, but never counted as open', async () => {
+    const view = await setup({ postgres: { status: 'Superseded' } }).resolution.viewFor(ISSUE, viewer);
+
+    expect(view.verdicts.find((v) => v.pageId === '101')?.lapsed).toEqual({ reason: 'Superseded' });
+    expect(view.counts).toMatchObject({ open: 0, resolved: 0, lapsed: 1 });
+  });
+
+  test('a Verdict the last Check already marked Lapsed stays Lapsed, with its replacement named', async () => {
+    const lapsedCheck: CheckResult = {
+      ...check,
+      verdicts: [{ ...postgres, lapsed: { reason: 'Superseded', supersededBy: 'Revisit: Postgres' } }],
+    };
+    const view = await setup({ check: lapsedCheck, postgres: { status: 'Superseded' } }).resolution.viewFor(ISSUE, viewer);
+    expect(view.verdicts[0].lapsed).toEqual({ reason: 'Superseded', supersededBy: 'Revisit: Postgres' });
+    expect(view.counts.open).toBe(0);
+  });
+
+  test('a stored lapse is ignored once the Decision is Accepted again', async () => {
+    const lapsedCheck: CheckResult = { ...check, verdicts: [{ ...postgres, lapsed: { reason: 'Superseded' } }] };
+    const view = await setup({ check: lapsedCheck }).resolution.viewFor(ISSUE, viewer);
+    expect(view.verdicts[0].lapsed).toBeUndefined();
+    expect(view.counts.open).toBe(1);
+  });
+
+  test('a Lapsed Verdict keeps the Resolution recorded on it', async () => {
+    const view = await setup({ postgres: { status: 'Superseded' }, resolutions: supersededBy('Supersede') }).resolution.viewFor(
+      ISSUE,
+      viewer
+    );
+    expect(view.verdicts.find((v) => v.pageId === '101')?.resolution?.kind).toBe('Supersede');
+    expect(view.counts).toMatchObject({ resolved: 0, lapsed: 1 });
+  });
+
+  test('flags a Verdict whose Decision was edited since the Check, but not a Lapsed one', async () => {
+    const edited = await setup({ check: { ...check, verdicts: [{ ...postgres, decisionVersion: 1 }] }, postgres: { version: 2 } })
+      .resolution.viewFor(ISSUE, viewer);
+    expect(edited.verdicts[0].isEdited).toBe(true);
+
+    const same = await setup({ check: { ...check, verdicts: [{ ...postgres, decisionVersion: 2 }] }, postgres: { version: 2 } })
+      .resolution.viewFor(ISSUE, viewer);
+    expect(same.verdicts[0].isEdited).toBe(false);
+  });
+
+  test('reports a failed Check only when it is newer than the last completed one', async () => {
+    const newer = await setup({ failedAt: '2026-11-13T10:00:00.000Z' }).resolution.viewFor(ISSUE, viewer);
+    expect(newer.failedAt).toBe('2026-11-13T10:00:00.000Z');
+
+    const older = await setup({ failedAt: '2026-11-11T10:00:00.000Z' }).resolution.viewFor(ISSUE, viewer);
+    expect(older.failedAt).toBeNull();
+
+    const firstFailed = await setup({ checked: false, failedAt: '2026-11-11T10:00:00.000Z' }).resolution.viewFor(ISSUE, viewer);
+    expect(firstFailed).toMatchObject({ isChecked: false, failedAt: '2026-11-11T10:00:00.000Z' });
+  });
+
+  test('reports how many Decisions were in scope, or null for Checks that predate it', async () => {
+    expect((await setup().resolution.viewFor(ISSUE, viewer)).decisionsInScope).toBeNull();
+    const counted = await setup({ check: { ...check, decisionsInScope: 0 } }).resolution.viewFor(ISSUE, viewer);
+    expect(counted.decisionsInScope).toBe(0);
+  });
+});
+
 describe('resolve', () => {
+  test('refuses to resolve a Lapsed Verdict, and changes nothing', async () => {
+    const { site, resolution } = setup({ postgres: { status: 'Superseded' } });
+    await expectCode(resolution.resolve(ISSUE, viewer, { kind: 'Acknowledge', pageId: '101' }), 'DecisionLapsed');
+    expect(site.saved.size).toBe(0);
+  });
+
   test('Acknowledge links the issue to the Decision and records who resolved it and when', async () => {
     const { site, resolution } = setup();
 

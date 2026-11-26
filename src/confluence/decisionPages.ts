@@ -114,3 +114,19 @@ export async function findDecisionPageIdByTitle(actor: Actor, spaceId: string, t
   const { results } = (await res.json()) as { results: { id: string; title: string }[] };
   return results.find((p) => p.title === title)?.id ?? null;
 }
+
+/**
+ * The page's labels and its space key — what decides whether it is a Decision
+ * in a Decision Space. One v1 call (already-granted content scope) returns both.
+ */
+export async function readPageScope(actor: Actor, pageId: string): Promise<{ labels: string[]; spaceKey: string }> {
+  const res = await requester(actor).requestConfluence(
+    route`/wiki/rest/api/content/${pageId}?expand=metadata.labels,space`
+  );
+  await expectOk(res, `Read labels and space of page ${pageId}`);
+  const page = (await res.json()) as {
+    space?: { key?: string };
+    metadata?: { labels?: { results?: { name: string }[] } };
+  };
+  return { labels: (page.metadata?.labels?.results ?? []).map((l) => l.name), spaceKey: page.space?.key ?? '' };
+}

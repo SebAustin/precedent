@@ -9,8 +9,9 @@
  *   in the set, never an exception — except Forge's consent error, which must
  *   always propagate so the "Allow access" prompt can appear.
  */
+import type { CheckFailure } from '../check/site';
 import type { CheckResult, Proposal } from '../check/types';
-import type { Decision } from '../domain/decision';
+import type { Decision, DecisionStatus } from '../domain/decision';
 import type { ResolutionState } from './resolutions';
 
 /** A Decision page as the Viewer can see it. `decision` is null when the page isn't well-formed. */
@@ -22,6 +23,14 @@ export interface DecisionRef {
   readonly decision: Decision | null;
 }
 
+/** What the Viewer can see of a Decision page now: enough to tell a Lapsed or edited Verdict. */
+export interface DecisionStanding {
+  /** null when the page is no longer a well-formed Decision. */
+  readonly status: DecisionStatus | null;
+  readonly version: number;
+  readonly url?: string;
+}
+
 export interface IssueLink {
   readonly pageId: string;
   readonly title: string;
@@ -31,11 +40,15 @@ export interface IssueLink {
 export interface ResolutionSite {
   /** Can the Viewer open this issue? */
   canViewIssue(issueKey: string): Promise<boolean>;
-  /** The stored check and Resolutions for an issue (either may be empty). */
-  readRecord(issueKey: string): Promise<{ readonly check: CheckResult | null; readonly resolutions: ResolutionState }>;
+  /** The stored Check, its Resolutions and any newer failed Check for an issue (each may be empty). */
+  readRecord(issueKey: string): Promise<{
+    readonly check: CheckResult | null;
+    readonly resolutions: ResolutionState;
+    readonly failure: CheckFailure | null;
+  }>;
   saveResolutions(issueKey: string, state: ResolutionState): Promise<void>;
-  /** Which of these Decision pages can the Viewer read? */
-  readableDecisionIds(pageIds: readonly string[]): Promise<ReadonlySet<string>>;
+  /** The standing of each of these Decision pages the Viewer can read; unreadable ones are absent. */
+  readDecisionStandings(pageIds: readonly string[]): Promise<ReadonlyMap<string, DecisionStanding>>;
   /** Reads a Decision page as the Viewer; null when they can't. */
   readDecision(pageId: string): Promise<DecisionRef | null>;
   readProposal(issueKey: string): Promise<Proposal>;

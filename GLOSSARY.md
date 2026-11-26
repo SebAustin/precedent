@@ -26,6 +26,10 @@ _Avoid_: Rejected decision
 A piece of planned work that Precedent checks against Precedents. In v1, a Jira issue's summary and description.
 _Avoid_: Request, ticket (when meaning the checked content)
 
+**Check**:
+One run of Precedent over a Proposal that produces its Verdicts against the current Precedents. A Check either completes or fails; a failed Check never replaces the last completed one.
+_Avoid_: Scan, analysis, run
+
 **Verdict**:
 Precedent's judgement about one Proposal–Decision pair: exactly one of Conflicts, Related or None.
 _Avoid_: Score, match, result
@@ -41,6 +45,10 @@ _Avoid_: Similar, aligned
 **Citation**:
 The specific Decision statement and one-sentence reason attached to every Conflicts or Related Verdict. A Verdict without a Citation is never shown.
 _Avoid_: Evidence, source
+
+**Lapsed Verdict**:
+A Verdict whose Decision is no longer a Precedent (Superseded, no longer labelled `decision`, or outside every Decision Space). It is never counted as an open Conflict and cannot be resolved; any Resolution already recorded on it is kept.
+_Avoid_: Stale, expired, outdated
 
 **Decision Space**:
 A Confluence space an admin has chosen as a source of Decisions. Precedent ignores Decisions outside Decision Spaces.

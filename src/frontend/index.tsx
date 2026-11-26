@@ -7,7 +7,7 @@ import { VerdictCard } from './VerdictCard';
 
 /** Headline lozenge. Counts come from the Resolution module; the panel never recomputes them. */
 function Summary({ view }: { view: ResolutionView }) {
-  const { open, resolved, related, dismissed } = view.counts;
+  const { open, resolved, related, dismissed, lapsed } = view.counts;
 
   if (open > 0) {
     return (
@@ -18,7 +18,7 @@ function Summary({ view }: { view: ResolutionView }) {
   }
   if (resolved > 0) return <Lozenge appearance="success">All conflicts resolved</Lozenge>;
   if (related > 0) return <Lozenge appearance="inprogress">{`${related} related decision${related > 1 ? 's' : ''}`}</Lozenge>;
-  if (dismissed > 0) return <Lozenge appearance="success">No open conflicts</Lozenge>;
+  if (dismissed > 0 || lapsed > 0) return <Lozenge appearance="success">No open conflicts</Lozenge>;
   return <Lozenge appearance="success">No precedent found</Lozenge>;
 }
 
@@ -66,9 +66,26 @@ const App = () => {
   if (state === undefined && !error) return <Spinner label="Loading Precedent" />;
 
   const isChecked = state?.isChecked ?? false;
+  // Nothing to check against, and nothing from earlier Checks to show either.
+  const hasNoDecisions = state?.decisionsInScope === 0 && state.verdicts.length === 0;
   return (
     <Stack space="space.200">
-      {state && isChecked ? <Summary view={state} /> : <Text>This issue hasn't been checked yet.</Text>}
+      {state && isChecked && !hasNoDecisions && <Summary view={state} />}
+      {hasNoDecisions && (
+        <Text>
+          No accepted Decisions found in your Decision Spaces. A Jira admin chooses them under Apps → Precedent.
+        </Text>
+      )}
+      {!isChecked && !state?.failedAt && <Text>This issue hasn't been checked yet.</Text>}
+      {state?.failedAt && (
+        <SectionMessage appearance="warning" title="The last check failed">
+          <Text>
+            {isChecked
+              ? 'Showing the last completed check. Use “Check again” to retry.'
+              : 'Precedent couldn’t check this issue yet. Use “Check now” to retry.'}
+          </Text>
+        </SectionMessage>
+      )}
       {error && (
         <SectionMessage appearance="warning" title="Precedent couldn't complete that">
           <Text>{error}</Text>
@@ -87,7 +104,7 @@ const App = () => {
         <Text size="small" color="color.text.subtlest">
           {/* Neutral on purpose: a hidden Decision may be a Conflict (and still count in the
               sidebar lozenge), so don't call it "related". */}
-          {`${state.counts.hidden} matching decision${state.counts.hidden > 1 ? 's are' : ' is'} in a space you can't access`}
+          {`${state.counts.hidden} relevant decision${state.counts.hidden > 1 ? 's are' : ' is'} in a space you can't access`}
         </Text>
       )}
       {state && state.counts.dismissed > 0 && (
@@ -105,6 +122,7 @@ const App = () => {
         {state?.checkedAt && (
           <Text size="small" color="color.text.subtlest">
             Checked {new Date(state.checkedAt).toLocaleString()}
+            {state.decisionsInScope ? ` against ${state.decisionsInScope} decision${state.decisionsInScope > 1 ? 's' : ''}` : ''}
           </Text>
         )}
       </Inline>

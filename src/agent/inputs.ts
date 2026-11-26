@@ -11,3 +11,12 @@ export function resolveIssueKey(named: unknown, contextKey: unknown): string {
   if (!ISSUE_KEY.test(key)) throw new Error('Tell me which Jira issue to look at (for example LUMENPAY-1).');
   return key;
 }
+
+/**
+ * The optional `recheck` input on check-proposal. Rovo may send a boolean or
+ * its text form, so both are accepted; anything else means "use the stored Check".
+ */
+export function wantsRecheck(value: unknown): boolean {
+  if (value === true) return true;
+  return typeof value === 'string' && ['true', 'yes'].includes(value.trim().toLowerCase());
+}

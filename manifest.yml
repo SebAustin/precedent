@@ -82,13 +82,18 @@ modules:
       name: Check issue against decisions
       function: check-proposal-fn
       actionVerb: GET
-      description: Checks a Jira issue against accepted decisions and returns conflicts and related decisions with quotes.
+      description: Checks a Jira issue against accepted decisions and returns conflicts and related decisions with quotes. Can check the issue again on request.
       inputs:
         issueKey:
           title: Issue key
           type: string
           required: false
           description: Jira issue key such as LUMENPAY-1. Omit when the user is viewing the issue.
+        recheck:
+          title: Check again
+          type: boolean
+          required: false
+          description: Set to true only when the user asks to check the issue again, for example after editing it or a decision.
     - key: acknowledge-conflict
       name: Acknowledge conflict
       function: acknowledge-conflict-fn
@@ -109,7 +114,7 @@ modules:
       name: Draft supersession
       function: draft-supersession-fn
       actionVerb: CREATE
-      description: Drafts a Proposed decision that would supersede a conflicting accepted decision and notifies its deciders. Only when the user explicitly asks.
+      description: Drafts a Proposed decision that would supersede a conflicting accepted decision and comments on the original decision. Only when the user explicitly asks.
       inputs:
         issueKey:
           title: Issue key
@@ -132,6 +137,7 @@ modules:
     - key: precedent-supersession-trigger
       function: supersession-trigger
       events:
+        - avi:confluence:created:page
         - avi:confluence:updated:page
   llm:
     - key: precedent-llm

@@ -49,10 +49,30 @@ describe('formatPrecedents', () => {
 function viewOf(readable: CitedVerdict[], state: ResolutionState = EMPTY_RESOLUTIONS, hidden = 0) {
   const unreadable = Array.from({ length: hidden }, (_, i): CitedVerdict => ({ ...readable[0], pageId: `h${i}`, title: `Hidden ${i}` }));
   const check = { version: 1 as const, contentHash: 'h', checkedAt: '2026-11-12T00:00:00Z', candidatesConsidered: 0, verdicts: [...readable, ...unreadable] };
-  return buildView(check, state, new Set(readable.map((v) => v.pageId)));
+  const standings = new Map(
+    readable.map((v) => [
+      v.pageId,
+      // A Lapsed Verdict's Decision is live-Superseded too; Accepted would un-lapse it.
+      { status: v.lapsed ? ('Superseded' as const) : ('Accepted' as const), version: 1, url: `https://site.example/wiki/${v.pageId}` },
+    ])
+  );
+  return buildView(check, state, standings);
 }
 
 describe('formatCheckForAgent', () => {
+  test('links each Decision with an absolute URL, so the link works inside Rovo chat', () => {
+    expect(formatCheckForAgent('LP-1', viewOf([conflict]))).toContain(`Link: https://site.example/wiki/${conflict.pageId}`);
+  });
+
+  test('never presents a Lapsed Verdict as an open conflict', () => {
+    const lapsed: CitedVerdict = { ...conflict, lapsed: { reason: 'Superseded', supersededBy: 'Revisit: Postgres' } };
+    const text = formatCheckForAgent('LP-1', viewOf([lapsed]));
+
+    expect(text).not.toContain('CONFLICTS');
+    expect(text).toContain('NO LONGER ACCEPTED');
+    expect(text).toContain('superseded by "Revisit: Postgres"');
+  });
+
   test('describes open conflicts first, with the citation and the three ways to resolve', () => {
     const text = formatCheckForAgent('LP-1', viewOf([conflict, related]));
 

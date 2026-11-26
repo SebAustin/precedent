@@ -20,4 +20,16 @@ describe('buildSearchIndex', () => {
 
     expect(buildSearchIndex(result)).toEqual({ conflictPageIds: ['1'], relatedPageIds: ['2', '3'] });
   });
+
+  test('leaves Lapsed Verdicts out: their Decision is no longer a Precedent', () => {
+    const result: CheckResult = {
+      version: 1,
+      contentHash: 'h',
+      checkedAt: 'now',
+      candidatesConsidered: 1,
+      verdicts: [{ ...base, pageId: '1', verdict: 'Conflicts', lapsed: { reason: 'Superseded' } }],
+    };
+
+    expect(buildSearchIndex(result)).toEqual({ conflictPageIds: [], relatedPageIds: [] });
+  });
 });

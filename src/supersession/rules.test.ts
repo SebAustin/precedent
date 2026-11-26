@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { Decision } from '../domain/decision';
-import { completeSupersession, draftSupersedingDecision } from './rules';
+import { completeSupersession, draftSupersedingDecision, isDecisionInScope } from './rules';
 
 const old: Decision = {
   title: 'Customer PII stays in the EU region',
@@ -57,11 +57,24 @@ describe('completeSupersession', () => {
     expect(completeSupersession({ ...replacement, status: 'Proposed' }, old)).toBeNull();
   });
 
+  test('does nothing while the replacement still has the drafted placeholder statement', () => {
+    const draft = draftSupersedingDecision(old, { issueKey: 'LUMENPAY-3', summary: 'Use MongoDB', description: '' }, '2026-11-26');
+    expect(completeSupersession({ ...draft, status: 'Accepted' }, old)).toBeNull();
+  });
+
   test('does nothing when the old Decision is already Superseded', () => {
     expect(completeSupersession(replacement, { ...old, status: 'Superseded' })).toBeNull();
   });
 
   test('does nothing when the replacement supersedes a different Decision', () => {
     expect(completeSupersession({ ...replacement, supersedes: 'Something else' }, old)).toBeNull();
+  });
+});
+
+describe('isDecisionInScope', () => {
+  test('only a page labelled decision, in a Decision Space, can complete a Supersession', () => {
+    expect(isDecisionInScope(['decision', 'database'], 'LUMENPAY', ['LUMENPAY'])).toBe(true);
+    expect(isDecisionInScope(['database'], 'LUMENPAY', ['LUMENPAY'])).toBe(false);
+    expect(isDecisionInScope(['decision'], 'OTHER', ['LUMENPAY'])).toBe(false);
   });
 });

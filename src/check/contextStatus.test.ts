@@ -102,3 +102,12 @@ describe('contextStatus', () => {
     expect(contextStatus({ openConflicts: 0, resolvedConflicts: 0, related: 0, isChecked: false })).toEqual({});
   });
 });
+
+describe('Lapsed Verdicts in the lozenge', () => {
+  test('a Conflict the last Check marked Lapsed is not counted as open', () => {
+    const lapsed: CitedVerdict = { ...conflict('1'), lapsed: { reason: 'Superseded' } };
+    expect(contextStatus(statusCounts(checked([lapsed]), EMPTY_RESOLUTIONS))).toEqual({
+      status: { type: 'lozenge', value: { label: 'Clear', type: 'default' } },
+    });
+  });
+});

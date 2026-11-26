@@ -8,7 +8,7 @@
 
 ## Inspiration
 
-Teams keep having the same meeting twice. Someone files a spike to try MongoDB, and weeks in, someone else remembers the team decided against it last spring — for reasons that are written down, in Confluence, where nobody looked. The decision record exists. It just isn't anywhere near the work.
+Teams keep having the same meeting twice. Someone files a spike to try MongoDB, and weeks in, someone else remembers the team decided against it last spring — for reasons that are written down, in Confluence, where nobody looked. The decision exists. It just isn't anywhere near the work.
 
 Architecture decision records are a good habit with a fatal flaw: they only help if you go and read them. I wanted decisions to come to the work instead — at the moment the work is written down, inside the tools the team already uses.
 

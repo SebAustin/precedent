@@ -13,8 +13,10 @@ export interface SearchIndex {
 }
 
 export function buildSearchIndex(result: CheckResult): SearchIndex {
+  // A Lapsed Verdict's Decision is no longer a Precedent, so it is not indexed as a live Conflict.
+  const live = result.verdicts.filter((v) => !v.lapsed);
   return {
-    conflictPageIds: result.verdicts.filter((v) => v.verdict === 'Conflicts').map((v) => v.pageId),
-    relatedPageIds: result.verdicts.filter((v) => v.verdict === 'Related').map((v) => v.pageId),
+    conflictPageIds: live.filter((v) => v.verdict === 'Conflicts').map((v) => v.pageId),
+    relatedPageIds: live.filter((v) => v.verdict === 'Related').map((v) => v.pageId),
   };
 }

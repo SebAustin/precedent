@@ -15,7 +15,9 @@ export function conflictsToAnnounce(
 ): string[] {
   const announced = new Set(alreadyAnnounced);
   return verdicts
-    .filter((v) => v.verdict === 'Conflicts' && !announced.has(v.pageId) && !resolutions.resolutions[v.pageId])
+    .filter(
+      (v) => v.verdict === 'Conflicts' && !v.lapsed && !announced.has(v.pageId) && !resolutions.resolutions[v.pageId]
+    )
     .map((v) => v.pageId);
 }
 

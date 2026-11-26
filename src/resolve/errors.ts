@@ -8,7 +8,8 @@ export type ResolutionErrorCode =
   | 'CannotAccessDecision'
   | 'NotAConflict'
   | 'AlreadyResolved'
-  | 'ReasonRequired';
+  | 'ReasonRequired'
+  | 'DecisionLapsed';
 
 const MESSAGES: Readonly<Record<ResolutionErrorCode, string>> = {
   CannotAccessIssue: "You can't access this issue, so Precedent can't show or change its check.",
@@ -16,6 +17,7 @@ const MESSAGES: Readonly<Record<ResolutionErrorCode, string>> = {
   NotAConflict: 'Only a Conflicts verdict can be resolved.',
   AlreadyResolved: 'This conflict has already been resolved.',
   ReasonRequired: 'Dismissing needs a short reason.',
+  DecisionLapsed: 'This decision is no longer accepted, so there is nothing left to resolve.',
 };
 
 export class ResolutionError extends Error {

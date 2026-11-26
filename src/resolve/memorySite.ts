@@ -3,21 +3,25 @@
  * write so tests can assert on observable outcomes (what was saved, created,
  * commented, linked), and can be told to fail a named operation.
  */
+import type { CheckFailure } from '../check/site';
 import type { CheckResult, Proposal } from '../check/types';
 import type { Decision } from '../domain/decision';
 import { EMPTY_RESOLUTIONS, type ResolutionState } from './resolutions';
-import type { DecisionRef, IssueLink, ResolutionSite } from './site';
+import type { DecisionRef, DecisionStanding, IssueLink, ResolutionSite } from './site';
 
 export interface MemoryDecision {
   readonly ref: DecisionRef;
   /** Whether the Viewer can read it. */
   readonly readable: boolean;
+  /** Current page version (default 1). */
+  readonly version?: number;
 }
 
 export interface MemorySiteSeed {
   readonly viewableIssues?: readonly string[];
   readonly checks?: Readonly<Record<string, CheckResult>>;
   readonly resolutions?: Readonly<Record<string, ResolutionState>>;
+  readonly failures?: Readonly<Record<string, CheckFailure>>;
   readonly decisions?: readonly MemoryDecision[];
   readonly proposals?: Readonly<Record<string, Proposal>>;
   readonly now?: Date;
@@ -58,12 +62,20 @@ export function memorySite(seed: MemorySiteSeed = {}): MemorySite {
     readRecord: async (issueKey) => ({
       check: seed.checks?.[issueKey] ?? null,
       resolutions: saved.get(issueKey) ?? EMPTY_RESOLUTIONS,
+      failure: seed.failures?.[issueKey] ?? null,
     }),
     saveResolutions: async (issueKey, state) => {
       maybeFail('saveResolutions');
       saved.set(issueKey, state);
     },
-    readableDecisionIds: async (pageIds) => new Set(pageIds.filter((id) => decisions.get(id)?.readable)),
+    readDecisionStandings: async (pageIds) =>
+      new Map(
+        pageIds.flatMap((id): [string, DecisionStanding][] => {
+          const found = decisions.get(id);
+          if (!found?.readable) return [];
+          return [[id, { status: found.ref.decision?.status ?? null, version: found.version ?? 1, url: found.ref.url }]];
+        })
+      ),
     readDecision: async (pageId) => {
       const found = decisions.get(pageId);
       return found?.readable ? found.ref : null;
