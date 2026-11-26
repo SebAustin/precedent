@@ -17,7 +17,7 @@
     "node": ">=24.22.1"
   },
   "devDependencies": {
-    "@forge/cli": "^15.1.0",
+    "@forge/cli": "^16.0.0",
     "@types/node": "^24.19.2",
     "@types/react": "^18.3.31",
     "@vitest/coverage-v8": "^5.1.0",
