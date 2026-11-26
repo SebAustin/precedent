@@ -61,22 +61,6 @@ export async function fetchDecisionRecords(spaceKeys: readonly string[]): Promis
   });
 }
 
-/**
- * Is this page a Decision (labelled) in one of the Decision Spaces? Asked of
- * the same CQL search the Check uses, so it needs no extra scope. (The v1
- * content-by-id read is gone: Confluence answers it with HTTP 410.)
- */
-export async function isDecisionInDecisionSpaces(pageId: string, spaceKeys: readonly string[]): Promise<boolean> {
-  if (spaceKeys.length === 0) return false;
-  const cql =
-    `type = page AND id = ${cqlString(pageId)} AND label = ${cqlString(DECISION_LABEL)} ` +
-    `AND space in (${spaceKeys.map(cqlString).join(', ')})`;
-  const res = await api.asApp().requestConfluence(route`/wiki/rest/api/content/search?cql=${cql}&limit=1`);
-  await failIfNotOk(res, `Check whether page ${pageId} is a Decision`);
-  const { results } = (await res.json()) as { results: unknown[] };
-  return results.length > 0;
-}
-
 export async function readCheckResult(issueKey: string): Promise<CheckResult | null> {
   const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}/properties/${CHECK_PROPERTY}`);
   if (res.status === 404) return null;

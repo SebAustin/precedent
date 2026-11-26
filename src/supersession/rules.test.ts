@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { Decision } from '../domain/decision';
-import { completeSupersession, draftSupersedingDecision } from './rules';
+import { completeSupersession, draftSupersedingDecision, isDecisionInScope } from './rules';
 
 const old: Decision = {
   title: 'Customer PII stays in the EU region',
@@ -68,5 +68,13 @@ describe('completeSupersession', () => {
 
   test('does nothing when the replacement supersedes a different Decision', () => {
     expect(completeSupersession({ ...replacement, supersedes: 'Something else' }, old)).toBeNull();
+  });
+});
+
+describe('isDecisionInScope', () => {
+  test('only a page labelled decision, in a Decision Space, can complete a Supersession', () => {
+    expect(isDecisionInScope(['decision', 'database'], 'LUMENPAY', ['LUMENPAY'])).toBe(true);
+    expect(isDecisionInScope(['database'], 'LUMENPAY', ['LUMENPAY'])).toBe(false);
+    expect(isDecisionInScope(['decision'], 'OTHER', ['LUMENPAY'])).toBe(false);
   });
 });

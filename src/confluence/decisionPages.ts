@@ -31,10 +31,12 @@ export interface DecisionPage {
   readonly body: string;
   readonly url: string | undefined;
   readonly parsed: ParseResult;
+  /** The page's label names (read in the same call). */
+  readonly labels: readonly string[];
 }
 
 export async function readDecisionPage(actor: Actor, pageId: string): Promise<DecisionPage> {
-  const res = await requester(actor).requestConfluence(route`/wiki/api/v2/pages/${pageId}?body-format=storage`);
+  const res = await requester(actor).requestConfluence(route`/wiki/api/v2/pages/${pageId}?body-format=storage&include-labels=true`);
   await expectOk(res, `Read Decision page ${pageId}`);
   const page = (await res.json()) as {
     id: string;
@@ -42,6 +44,7 @@ export async function readDecisionPage(actor: Actor, pageId: string): Promise<De
     spaceId: string;
     version: { number: number };
     body: { storage?: { value?: string } };
+    labels?: { results?: { name: string }[] };
     _links?: { base?: string; webui?: string };
   };
   const body = page.body.storage?.value ?? '';
@@ -53,6 +56,7 @@ export async function readDecisionPage(actor: Actor, pageId: string): Promise<De
     body,
     url: page._links?.base && page._links.webui ? `${page._links.base}${page._links.webui}` : undefined,
     parsed: parseDecisionPage(page.title, body),
+    labels: (page.labels?.results ?? []).map((l) => l.name),
   };
 }
 
@@ -113,4 +117,12 @@ export async function findDecisionPageIdByTitle(actor: Actor, spaceId: string, t
   await expectOk(res, `Find Decision "${title}"`);
   const { results } = (await res.json()) as { results: { id: string; title: string }[] };
   return results.find((p) => p.title === title)?.id ?? null;
+}
+
+/** A space's key (Decision Spaces are chosen by key; pages only carry the space id). */
+export async function readSpaceKey(actor: Actor, spaceId: string): Promise<string> {
+  const res = await requester(actor).requestConfluence(route`/wiki/api/v2/spaces/${spaceId}`);
+  await expectOk(res, `Read space ${spaceId}`);
+  const { key } = (await res.json()) as { key: string };
+  return key;
 }
