@@ -3,7 +3,7 @@
  * names the one it replaces. The old Decision only becomes Superseded when a
  * person sets the replacement to Accepted — Precedent never overrules a human.
  */
-import { DECISION_LABEL, type Decision } from '../domain/decision';
+import type { Decision } from '../domain/decision';
 import type { Proposal } from '../check/types';
 
 /** Starts every drafted statement; a person must replace it before the draft can be Accepted. */
@@ -33,9 +33,4 @@ export function completeSupersession(replacement: Decision, old: Decision): Deci
   if (replacement.supersedes !== old.title) return null;
   if (old.status !== 'Accepted') return null;
   return { ...old, status: 'Superseded' };
-}
-
-/** Only a Decision (labelled, in a Decision Space) may complete a Supersession. */
-export function isDecisionInScope(labels: readonly string[], spaceKey: string, decisionSpaces: readonly string[]): boolean {
-  return labels.includes(DECISION_LABEL) && decisionSpaces.includes(spaceKey);
 }
