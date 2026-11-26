@@ -83,5 +83,5 @@ Atlassian Forge · TypeScript · UI Kit · Forge LLM (Claude Haiku 4.5, Claude S
 ## Links
 
 - Demo video: `<VIDEO LINK>`
-- Source (MIT): `<GITHUB REPO URL>`
+- Source (MIT): https://github.com/SebAustin/precedent
 - Install link and testing steps: see [TESTING.md](TESTING.md)
